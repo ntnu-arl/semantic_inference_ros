@@ -1,0 +1,2 @@
+Header header
+semantic_inference_msgs/VlmForNavigationRelationshipOutput[] output

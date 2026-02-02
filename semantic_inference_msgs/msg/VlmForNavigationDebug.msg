@@ -1,0 +1,3 @@
+Header header
+semantic_inference_msgs/VlmForNavigationRelationshipOutput[] selected
+semantic_inference_msgs/VlmForNavigationRelationshipOutput[] unselected

@@ -1,0 +1,74 @@
+name,red,green,blue,alpha,id,color
+wall,0,100,0,255,0,dark green
+building,0,255,127,255,1,spring green
+floor,192,192,192,255,2,silver
+tree,128,128,0,255,3,olive
+ceiling,220,20,60,255,4,crimson
+bed,238,130,238,255,5,violet
+windowpane,135,206,235,255,6,sky blue
+cabinet,139,0,0,255,7,dark red
+person,0,0,128,255,8,navy
+door,0,128,0,255,9,green
+plant,250,128,114,255,10,salmon
+curtain,106,90,205,255,11,slate blue
+chair,0,0,255,255,12,blue
+car,255,99,71,255,13,tomato
+water,199,21,133,255,14,medium violet red
+painting,147,112,219,255,15,medium purple
+sofa,0,191,255,255,16,deep sky blue
+house,255,127,80,255,17,coral
+mirror,135,206,250,255,18,light sky blue
+fence,154,205,50,255,19,yellow green
+desk,255,0,0,255,20,red
+rock,46,139,87,255,21,sea green
+wardrobe,148,0,211,255,22,dark violet
+lamp,255,105,180,255,23,hot pink
+bathtub,30,144,255,255,24,dodger blue
+base,127,255,212,255,25,aqua marine
+box,70,130,180,255,26,steel blue
+sink,240,230,140,255,27,khaki
+fireplace,186,85,211,255,28,medium orchid
+refrigerator,50,205,50,255,29,lime green
+stairs,255,20,147,255,30,deep pink
+case,152,251,152,255,31,pale green
+pillow,0,128,128,255,32,teal
+toilet,0,0,139,255,33,dark blue
+book,75,0,130,255,34,indigo
+bench,0,255,0,255,35,lime
+stove,139,0,139,255,36,dark magenta
+computer,255,215,0,255,37,gold
+towel,127,255,0,255,38,chartreuse
+light,124,252,0,255,39,lawn green
+chandelier,25,25,112,255,40,midnight blue
+streetlight,255,255,224,255,41,light yellow
+booth,176,224,230,255,42,powder blue
+television receiver,32,178,170,255,43,light sea green
+pole,0,0,205,255,44,medium blue
+escalator,218,112,214,255,45,orchid
+ottoman,255,218,185,255,46,peach puff
+bottle,210,180,140,255,47,tan
+poster,65,105,225,255,48,royal blue
+stool,50,205,50,255,49,lime green
+barrel,240,248,255,255,50,alice blue
+basket,64,224,208,255,51,turquoise
+bag,165,42,42,255,52,brown
+oven,255,140,0,255,53,dark orange
+ball,112,128,144,255,54,slate gray
+food,255,0,255,255,55,magenta
+microwave,244,164,96,255,56,sandy brown
+pot,240,255,240,255,57,honeydew
+animal,221,160,221,255,58,plum
+dishwasher,139,69,19,255,59,saddle brown
+screen,128,0,128,255,60,purple
+trashcan,255,255,0,255,61,yellow
+fan,0,139,139,255,62,dark cyan
+plate,178,34,34,255,63,firebrick
+monitor,128,0,0,255,64,maroon
+shower,138,43,226,255,65,blue violet
+radiator,255,165,0,255,66,orange
+glass,205,92,92,255,67,indian red
+clock,189,183,107,255,68,dark khaki
+flag,230,230,250,255,69,lavender
+blanket,210,105,30,255,70,chocolate
+backpack,47,79,79,255,71,dark slate gray
+drone,123,104,238,255,72,medium slate blue

@@ -1,0 +1,13 @@
+<?xml version="1.0"?>
+<package format="2">
+    <name>semantic_inference_python</name>
+    <version>0.0.0</version>
+    <description>Package for semantic_inference_python</description>
+    <author email="albert.g.puigjaner@ntnu.no">Albert Gassol Puigjaner</author>
+    <maintainer email="albert.g.puigjaner@ntnu.no">Albert Gassol Puigjaner</maintainer>
+    <license>BSD</license>
+
+    <buildtool_depend>catkin</buildtool_depend>
+    <buildtool_depend>catkin_simple</buildtool_depend>
+    <exec_depend>rospy</exec_depend>
+</package>

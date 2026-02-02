@@ -1,0 +1,17 @@
+<launch>
+
+<arg name="visual_relationships_encodings_topic" default="/hydra_ros_node/backend/vlm_relationships/visual_relationships_encodings"/>
+<arg name="vlm_labels_from_prompt_config_path" default="$(find semantic_inference_ros)/config/vlm_prompting.yaml" doc="Configuration file for VLM prompting"/>
+<arg name="height" default="720" doc="Height of the input image"/>
+<arg name="width" default="1280" doc="Width of the input image"/>
+<arg name="python_env" default="$(find semantic_inference_python)/ros_semantics_env/bin/python" doc="Python environment for open vocab"/>
+
+<node pkg="semantic_inference_ros" type="encode_vlm_labels_node" name="encode_vlm_labels_node" ns="semantic_inference"
+          launch-prefix="$(arg python_env)" output="$(eval 'screen' if verbose else 'log')" required="false">
+          <remap from="/semantic_inference/visual_relationships_encodings" to="$(arg visual_relationships_encodings_topic)"/>
+          <rosparam file="$(arg vlm_labels_from_prompt_config_path)"/>
+          <param name="vlm/height" value="$(arg height)"/>
+          <param name="vlm/width" value="$(arg width)"/>
+</node>
+
+</launch>

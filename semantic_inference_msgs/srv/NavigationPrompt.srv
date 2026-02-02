@@ -1,0 +1,5 @@
+string prompt
+string room
+---
+semantic_inference_msgs/NavigationPromptsEmbeddings response
+string error

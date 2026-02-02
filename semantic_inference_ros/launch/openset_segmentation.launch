@@ -1,0 +1,34 @@
+<launch>
+
+  <!-- options -->
+  <arg name="config_path" default="$(find semantic_inference_ros)/config/openset_segmentation.yaml" doc="Configuration file for object detector"/>
+  <arg name="min_separation_s" default="0.5" doc="Minimum time between input images"/>
+  <arg name="yolo_model_name" default="yoloe-11l-seg.pt" doc="Name of the YOLO model to use"/>
+  <arg name="labelspace_name" default="ade20k_full" doc="semantic label space"/>
+  <arg name="colormap_path" default="$(find semantic_inference)/config/distinct_150_colors.csv" doc="Visualization colormap"/>
+  <arg name="model_name" default="mobile_sam.pt"/>
+  <arg name="segmentation_model" default="yoloe"/>
+  <arg name="segmentation_cuda" default="true" doc="Use CUDA for open vocab segmentation"/>
+  <arg name="segmentation_model_name" default="mobile_sam.pt"/>
+  <arg name="python_env" default="$(find semantic_inference_python)/ros_semantics_env/bin/python" doc="Python environment for open vocab"/>
+  <arg name="labelspace_dir" default="$(find hydra)/config/label_spaces"/>
+  <arg name="playback_mode" default="false" doc="Run in playback mode with compressed images"/>
+  <arg name="print_inference_time" default="false" doc="Print inference time"/>
+  <arg name="camera_info_topic" default="/camera/color/camera_info"/>
+  <node pkg="semantic_inference_ros" type="openset_segmentation_node" name="semantic_inference" ns="semantic_inference"
+        output="screen" required="false" launch-prefix="$(arg python_env)">
+        <rosparam file="$(arg config_path)" ns="model"/>
+        <rosparam file="$(arg labelspace_dir)/$(arg labelspace_name)_label_space.yaml" ns="model"/>
+        <rosparam file="$(find semantic_inference)/config/label_groupings/$(arg labelspace_name).yaml" ns="model/segmentation"/>
+        <param name="model/segmentation/yolo_model_name" value="$(arg yolo_model_name)"/>
+        <param name="model/cuda" value="$(arg segmentation_cuda)"/>
+        <param name="worker/min_separation_s" value="$(arg min_separation_s)"/>
+        <param name="model/segmentation/type" value="$(arg segmentation_model)"/>
+        <param name="recolor/colormap_path" value="$(arg colormap_path)"/>
+        <param name="model/segmentation/model_name" value="$(arg segmentation_model_name)"/>
+        <param name="playback_mode" value="$(arg playback_mode)"/>
+        <param name="print_inference_time" value="$(arg print_inference_time)"/>
+        <remap from="/semantic_inference/color/camera_info" to="$(arg camera_info_topic)"/>
+  </node>
+
+</launch>

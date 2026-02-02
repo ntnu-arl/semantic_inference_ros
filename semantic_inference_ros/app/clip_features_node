@@ -1,0 +1,158 @@
+#!/usr/bin/env python3
+"""Node that runs openset segmentation."""
+from dataclasses import dataclass, field
+
+import rospy
+import semantic_inference_python.models as models
+import semantic_inference_ros
+import torch
+import numpy as np
+import cv2
+
+from semantic_inference_python import Config
+from semantic_inference_msgs.msg import FeatureImage, FeatureVectorStamped
+from semantic_inference_ros import Conversions, SyncImagesWorkerConfig, RecolorConfig
+from sensor_msgs.msg import Image, CompressedImage, CameraInfo
+
+
+@dataclass
+class CLIPFeaturesNodeConfig(Config):
+    """Configuration for CLIPFeaturesNode."""
+
+    worker: SyncImagesWorkerConfig = field(default_factory=SyncImagesWorkerConfig)
+    model: models.CLIPFeaturesExtractorConfig = field(
+        default_factory=models.CLIPFeaturesExtractorConfig
+    )
+    recolor: RecolorConfig = field(default_factory=RecolorConfig)
+    playback_mode: bool = False
+
+
+class CLIPFeaturesNode:
+    """Node to run clip inference on a segmentation mask and image."""
+
+    def __init__(self) -> None:
+        """Start subscriber and publisher."""
+        self.config = semantic_inference_ros.load_from_ros(
+            CLIPFeaturesNodeConfig, ns="~"
+        )
+
+        rospy.loginfo(f"'{rospy.get_name()}': Initializing with {self.config.show()}")
+        device = models.default_device(self.config.model.cuda)
+        recolor = semantic_inference_ros.Recolor(self.config.recolor)
+        rgb_to_id = {tuple(rgba[:3]): id for id, rgba in recolor.id_to_rgba.items()}
+        id_to_name = {v: k for k, v in recolor.name_to_id.items()}
+        self._model = models.CLIPFeaturesExtractor(
+            self.config.model, rgb_to_id, id_to_name
+        ).to(device)
+        self._model.eval()
+        self.map1 = None
+        self.map2 = None
+        rospy.loginfo(f"'{rospy.get_name()}': finished initializing!")
+
+        self._feature_image_color_pub_ = rospy.Publisher(
+            "semantic_color/feature_image",
+            FeatureImage,
+            queue_size=1,
+        )
+        self._clip_pub = rospy.Publisher(
+            "image_feature", FeatureVectorStamped, queue_size=1
+        )
+
+        self._camera_info_sub = rospy.Subscriber(
+            "color/camera_info", CameraInfo, self.callback_camera_info
+        )
+        self._worker = semantic_inference_ros.SyncImagesWorker(
+            self.config.worker,
+            [
+                "color/image_raw",
+                "semantic_color/image_raw",
+                "panoptic/image_raw",
+                "depth/image_raw",
+            ],
+            [Image, Image, Image, Image]
+            if not self.config.playback_mode
+            else [CompressedImage, Image, Image, CompressedImage],
+            self._spin_once,
+        )
+
+    def callback_camera_info(self, msg: CameraInfo) -> None:
+        """Callback for camera info."""
+        K = np.array(msg.K).reshape((3, 3))
+        D = np.array(msg.D)
+        image_size = (msg.width, msg.height)
+
+        self.map1, self.map2 = cv2.initUndistortRectifyMap(
+            K, D, None, K, image_size, cv2.CV_16SC2
+        )
+
+        rospy.loginfo("[CLIP node] Undistortion maps initialized")
+
+        # Unsubscribe to save resources
+        self._camera_info_sub.unregister()
+
+    def _spin_once(
+        self,
+        header,
+        color_img: np.ndarray,
+        semantic_img: np.ndarray,
+        panoptic_img: np.ndarray,
+        depth_img: np.ndarray,
+    ) -> None:
+        """
+        Compute the clip features and publish them.
+        :param header: The header of the image.
+        :param color_img: The color image.
+        :param semantic_img: The semantic image.
+        :param panoptic_img: The panoptic image.
+        :param depth_img: The depth image.
+        """
+
+        if self.map1 is None or self.map2 is None:
+            rospy.logwarn(
+                "[CLIP node] Undistortion maps not initialized yet. Skipping processing."
+            )
+            return
+        color_img = cv2.remap(
+            color_img, self.map1, self.map2, interpolation=cv2.INTER_LINEAR
+        )
+        depth_img = cv2.remap(
+            depth_img, self.map1, self.map2, interpolation=cv2.INTER_LINEAR
+        )
+
+        if depth_img.dtype == np.uint16:
+            depth_img = depth_img.astype(np.float32) / 1000.0  # Convert to meters
+        elif depth_img.dtype != np.float32:
+            rospy.logerr(
+                f"[CLIP node] Depth image has unsupported dtype {depth_img.dtype}. Expected uint16 or float32."
+            )
+            return
+        with torch.no_grad():
+            ret = self._model(
+                color_img.copy(),
+                semantic_img.copy(),
+                panoptic_img.copy(),
+                depth_img.copy(),
+            ).cpu()
+
+        self._clip_pub.publish(
+            Conversions.to_stamped_feature(header, ret.image_embedding)
+        )
+        msg = Conversions.to_colored_feature_image(header, ret, semantic_img)
+        self._feature_image_color_pub_.publish(msg)
+
+    def spin(self) -> None:
+        """Wait until ros shuts down."""
+        self._worker.spin()
+
+
+def main() -> None:
+    """Start a node."""
+    rospy.init_node("clip_features_node")
+    semantic_inference_ros.setup_ros_log_forwarding()
+
+    node = CLIPFeaturesNode()
+    node.spin()
+
+
+if __name__ == "__main__":
+    main()

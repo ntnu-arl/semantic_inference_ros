@@ -1,0 +1,255 @@
+#!/usr/bin/env python3
+"""Node that extracts VLM features."""
+from dataclasses import dataclass, field
+
+import rospy
+import tf2_ros
+import time
+import semantic_inference_ros
+import torch
+import numpy as np
+import cv2
+from scipy.spatial.transform import Rotation as R
+
+from semantic_inference_python import Config
+import semantic_inference_python.models as models
+from sensor_msgs.msg import Image, CompressedImage, CameraInfo
+from hydra_msgs.msg import ActiveObjectRelationships
+from std_msgs.msg import Header
+
+from semantic_inference_msgs.msg import FeatureVectorsStamped
+from semantic_inference_ros import Conversions, SyncImagesWorkerConfig, RecolorConfig
+
+
+@dataclass
+class VLMFeatureNodeConfig(Config):
+    """Configuration for CLIPFeaturesNode."""
+
+    worker: SyncImagesWorkerConfig = field(default_factory=SyncImagesWorkerConfig)
+    model: models.VLMFeatureExtractorConfig = field(
+        default_factory=models.VLMFeatureExtractorConfig
+    )
+    recolor: RecolorConfig = field(default_factory=RecolorConfig)
+    playback_mode: bool = False
+    print_inference_time: bool = False
+    world_frame: str = "world"
+    camera_frame: str = "camera_color_optical_frame"
+
+
+class VLMFeaturesNode:
+    """Node to run VLM inference on a seg mask and an image."""
+
+    def __init__(self):
+        """Start subscriber and publisher."""
+        self.config = semantic_inference_ros.load_from_ros(VLMFeatureNodeConfig, ns="~")
+
+        rospy.loginfo(f"'{rospy.get_name()}': Initializing with {self.config.show()}")
+        device = models.default_device(self.config.model.cuda)
+        recolor = semantic_inference_ros.Recolor(self.config.recolor)
+        rgb_to_id = {tuple(rgba[:3]): id for id, rgba in recolor.id_to_rgba.items()}
+        rgb_to_id[tuple([255, 255, 255])] = 0
+        id_to_name = {v: k for k, v in recolor.name_to_id.items()}
+        self._model = models.VLMFeatureExtractor(
+            self.config.model, rgb_to_id, id_to_name
+        )
+        self._model.move_to(device)
+        self._model.eval()
+        self.map1 = None
+        self.map2 = None
+        rospy.loginfo(f"'{rospy.get_name()}': finished initializing!")
+
+        self._vlm_pub = rospy.Publisher(
+            "relation_features",
+            FeatureVectorsStamped,
+            queue_size=20,
+        )
+
+        if self.config.model.publish_masks:
+            self._mask_pub = rospy.Publisher(
+                "relation_annotations",
+                Image,
+                queue_size=20,
+            )
+        else:
+            self._mask_pub = None
+
+        if self._model.config.use_graph_edges:
+            rospy.Subscriber(
+                "active_object_edges", ActiveObjectRelationships, self.set_active_edges
+            )
+            self.tf_buffer = tf2_ros.Buffer()
+            self.tf_listener = tf2_ros.TransformListener(self.tf_buffer)
+
+        self._camera_info_sub = rospy.Subscriber(
+            "color/camera_info", CameraInfo, self.callback_camera_info
+        )
+        # Print subscription topic
+        self._worker = semantic_inference_ros.SyncImagesWorker(
+            self.config.worker,
+            [
+                "color/image_raw",
+                "semantic_color/image_raw",
+                "panoptic/image_raw",
+                "depth/image_raw",
+            ],
+            [Image, Image, Image, Image]
+            if not self.config.playback_mode
+            else [CompressedImage, Image, Image, CompressedImage],
+            self._spin_once,
+        )
+
+    def set_active_edges(self, msg: ActiveObjectRelationships):
+        """Set active edges from the message."""
+        bounding_boxes = [
+            models.BoundingBox(
+                world_P_center=torch.tensor(
+                    [
+                        box.center.position.x,
+                        box.center.position.y,
+                        box.center.position.z,
+                    ]
+                ).to(self._model.device),
+                world_R_center=torch.from_numpy(
+                    R.from_quat(
+                        [
+                            box.center.orientation.x,
+                            box.center.orientation.y,
+                            box.center.orientation.z,
+                            box.center.orientation.w,
+                        ]
+                    ).as_matrix()
+                ).to(self._model.device),
+                dimensions=torch.tensor([box.size.x, box.size.y, box.size.z]).to(
+                    self._model.device
+                ),
+            )
+            for box in msg.object_boxes
+        ]
+        self._model.active_relations = models.ActiveRelations(
+            bounding_boxes=bounding_boxes,
+            relationships=set(
+                (msg.object_ids[2 * i], msg.object_ids[2 * i + 1])
+                if msg.object_ids[2 * i] > msg.object_ids[2 * i + 1]
+                else (msg.object_ids[2 * i + 1], msg.object_ids[2 * i])
+                for i in range(len(msg.object_ids) // 2)
+            ),
+        )
+
+    def callback_camera_info(self, msg: CameraInfo):
+        """Callback for camera i`nfo."""
+        self.K = np.array(msg.K).reshape((3, 3))
+        D = np.array(msg.D)
+        image_size = (msg.width, msg.height)
+
+        self.map1, self.map2 = cv2.initUndistortRectifyMap(
+            self.K, D, None, self.K, image_size, cv2.CV_16SC2
+        )
+
+        rospy.loginfo("[VLM node] Undistortion maps initialized")
+
+        # Unsubscribe to save resources
+        self._camera_info_sub.unregister()
+
+    def _spin_once(
+        self,
+        header: Header,
+        color_img: np.ndarray,
+        semantic_img: np.ndarray,
+        panoptic_img: np.ndarray,
+        depth_img: np.ndarray,
+    ):
+        start_time = time.time()
+        if self.map1 is None or self.map2 is None:
+            rospy.logwarn(
+                "[VLM node] Undistortion maps not initialized yet. Skipping processing."
+            )
+            return
+        transform = None
+        if self._model.config.use_graph_edges:
+            try:
+                raw_transform = self.tf_buffer.lookup_transform(
+                    self.config.world_frame,
+                    self.config.camera_frame,
+                    header.stamp,
+                    rospy.Duration(1.0),
+                )
+                transform = torch.eye(4, dtype=torch.float32, device=self._model.device)
+                transform[:3, :3] = torch.tensor(
+                    R.from_quat(
+                        [
+                            raw_transform.transform.rotation.x,
+                            raw_transform.transform.rotation.y,
+                            raw_transform.transform.rotation.z,
+                            raw_transform.transform.rotation.w,
+                        ]
+                    ).as_matrix(),
+                    device=self._model.device,
+                )
+                transform[:3, 3] = torch.tensor(
+                    [
+                        raw_transform.transform.translation.x,
+                        raw_transform.transform.translation.y,
+                        raw_transform.transform.translation.z,
+                    ],
+                    device=self._model.device,
+                )
+            except:
+                rospy.logwarn(
+                    "[VLM node] Could not get transform from camera to world frame. Skipping processing."
+                )
+                return
+
+        color_img = cv2.remap(
+            color_img, self.map1, self.map2, interpolation=cv2.INTER_LINEAR
+        )
+        depth_img = cv2.remap(
+            depth_img, self.map1, self.map2, interpolation=cv2.INTER_LINEAR
+        )
+        if depth_img.dtype == np.uint16:
+            depth_img = depth_img.astype(np.float32) / 1000.0  # Convert to meters
+        elif depth_img.dtype != np.float32:
+            rospy.logerr(
+                f"[VLM node] Depth image has unsupported dtype {depth_img.dtype}. Expected uint16 or float32."
+            )
+            return
+        with torch.inference_mode():
+            vlm_features, panoptic_ids, annotation_img = self._model(
+                np.asarray(color_img).copy(),
+                np.asarray(semantic_img).copy(),
+                np.asarray(panoptic_img).copy(),
+                np.asanyarray(depth_img).copy(),
+                choice=None,
+                camera_matrix=self.K,
+                transform=transform,
+            )
+        # Log inference time in ms
+        if self.config.print_inference_time:
+            rospy.loginfo(
+                f"[VLM node] Total inference time: {(time.time() - start_time) * 1000:.3f} ms"
+            )
+        self._vlm_pub.publish(
+            Conversions.to_stamped_features(header, vlm_features, panoptic_ids)
+        )
+        if self.config.model.publish_masks and annotation_img is not None:
+            self._mask_pub.publish(
+                Conversions.to_sensor_image(
+                    annotation_img, header=header, encoding="rgb8"
+                )
+            )
+
+    def spin(self):
+        """Wait until ros shuts down."""
+        self._worker.spin()
+
+
+def main():
+    """Start a node."""
+    rospy.init_node("vlm_features_node")
+    semantic_inference_ros.setup_ros_log_forwarding()
+
+    node = VLMFeaturesNode()
+    node.spin()
+
+
+if __name__ == "__main__":
+    main()

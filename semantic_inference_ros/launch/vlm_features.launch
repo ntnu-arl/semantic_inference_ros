@@ -1,0 +1,43 @@
+<launch>
+    <!-- Replay mode false by default -->
+    <arg name="playback_mode" default="false" doc="Run in playback mode with compressed images"/>
+    <arg name="print_inference_time" default="false" doc="Print inference time"/>
+    <!-- Input configuration -->
+    <arg name="min_separation_s" default="0.7" doc="Enforced separation between input images"/>
+    <arg name="labelspace_dir" default="$(find hydra)/config/label_spaces"/>
+    <arg name="labelspace_name" default="ade20k_full" doc="Name of the label space to use"/>
+    <arg name="camera_info_topic" default="/camera/color/camera_info" doc="Camera info topic for undistortion"/>
+    <arg name="active_object_edges_topic" default="/hydra_ros_node/backend/active_object_edges" doc="Topic for active object edges"/>
+    <arg name="odom_frame" default="world" doc="World frame for VLM node"/>
+    <arg name="sensor_frame" default="camera_color_optical_frame" doc="Camera frame for VLM node"/>
+    <!-- Colormap and label grouping -->
+    <arg name="colormap_path" default="$(find semantic_inference)/config/distinct_150_colors.csv" doc="Visualization colormap"/>
+
+    <!-- VLM -->
+    <arg name="config_path_vlm" default="$(find semantic_inference_ros)/config/vlm.yaml" doc="Configuration file for object detector"/>
+    <arg name="pub_vlm_annotations" default="true" doc="Publish VLM annotations"/>
+    <arg name="height" default="720" doc="Height of the input image"/>
+    <arg name="width" default="1280" doc="Width of the input image"/>
+    <arg name="vlm_queue_size" default="100" doc="Queue size for VLM node"/>
+    <arg name="python_env" default="$(find semantic_inference_python)/ros_semantics_env/bin/python" doc="Python environment for open vocab"/>
+
+    <!-- VLM -->
+    <!-- launch-prefix="$(arg python_env)" -->
+    <node pkg="semantic_inference_ros" type="vlm_features_node" name="vlm_features_node" ns="semantic_inference"
+          output="screen" required="false" launch-prefix="$(arg python_env)">
+        <rosparam file="$(arg config_path_vlm)" ns="model"/>
+        <rosparam file="$(arg labelspace_dir)/$(arg labelspace_name)_label_space.yaml" ns="model"/>
+        <param name="model/publish_masks" value="$(arg pub_vlm_annotations)"/>
+        <param name="model/vlm/height" value="$(arg height)"/>
+        <param name="model/vlm/width" value="$(arg width)"/>
+        <param name="recolor/colormap_path" value="$(arg colormap_path)"/>
+        <param name="worker/min_separation_s" value="$(arg min_separation_s)"/>
+        <param name="worker/queue_size" value="$(arg vlm_queue_size)"/>
+        <param name="playback_mode" value="$(arg playback_mode)"/>
+        <param name="world_frame" value="$(arg odom_frame)"/>
+        <param name="camera_frame" value="$(arg sensor_frame)"/>
+        <param name="print_inference_time" value="$(arg print_inference_time)"/>
+        <remap from="/semantic_inference/color/camera_info" to="$(arg camera_info_topic)"/>
+        <remap from="/semantic_inference/active_object_edges" to="$(arg active_object_edges_topic)"/>
+    </node>
+</launch>

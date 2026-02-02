@@ -1,0 +1,82 @@
+---
+name: anymal
+distinct: true
+offset: -1
+groups:
+  - {name: wall, labels: [1]}
+  - {name: building, labels: [2]}
+  - {name: floor, labels: [3]}
+  - {name: tree, labels: [4]}
+  - {name: ceiling, labels: [5]}
+  - {name: bed, labels: [6]}
+  - {name: windowpane, labels: [7]}
+  - {name: cabinet, labels: [8]}
+  - {name: person, labels: [9]}
+  - {name: door, labels: [10]}
+  - {name: plant, labels: [11]}
+  - {name: curtain, labels: [12]}
+  - {name: chair, labels: [13]}
+  - {name: car, labels: [14]}
+  - {name: water, labels: [15]}
+  - {name: painting, labels: [16]}
+  - {name: sofa, labels: [17]}
+  - {name: house, labels: [18]}
+  - {name: mirror, labels: [19]}
+  - {name: fence, labels: [20]}
+  - {name: desk, labels: [21]}
+  - {name: rock, labels: [22]}
+  - {name: wardrobe, labels: [23]}
+  - {name: lamp, labels: [24]}
+  - {name: bathtub, labels: [25]}
+  - {name: base, labels: [26]}
+  - {name: box, labels: [27]}
+  - {name: sink, labels: [28]}
+  - {name: fireplace, labels: [29]}
+  - {name: refrigerator, labels: [30]}
+  - {name: stairs, labels: [31]}
+  - {name: case, labels: [32]}
+  - {name: pillow, labels: [33]}
+  - {name: toilet, labels: [34]}
+  - {name: book, labels: [35]}
+  - {name: bench, labels: [36]}
+  - {name: stove, labels: [37]}
+  - {name: computer, labels: [38]}
+  - {name: towel, labels: [39]}
+  - {name: light, labels: [40]}
+  - {name: chandelier, labels: [41]}
+  - {name: streetlight, labels: [42]}
+  - {name: booth, labels: [43]}
+  - {name: television receiver, labels: [44]}
+  - {name: pole, labels: [45]}
+  - {name: escalator, labels: [46]}
+  - {name: ottoman, labels: [47]}
+  - {name: bottle, labels: [48]}
+  - {name: poster, labels: [49]}
+  - {name: stool, labels: [50]}
+  - {name: barrel, labels: [51]}
+  - {name: basket, labels: [52]}
+  - {name: bag, labels: [53]}
+  - {name: oven, labels: [54]}
+  - {name: ball, labels: [55]}
+  - {name: food, labels: [56]}
+  - {name: microwave, labels: [57]}
+  - {name: pot, labels: [58]}
+  - {name: animal, labels: [59]}
+  - {name: dishwasher, labels: [60]}
+  - {name: screen, labels: [61]}
+  - {name: trashcan, labels: [62]}
+  - {name: fan, labels: [63]}
+  - {name: plate, labels: [64]}
+  - {name: monitor, labels: [65]}
+  - {name: shower, labels: [66]}
+  - {name: radiator, labels: [67]}
+  - {name: glass, labels: [68]}
+  - {name: clock, labels: [69]}
+  - {name: flag, labels: [70]}
+  - {name: blanket, labels: [71]}
+  - {name: backpack, labels: [72]}
+  - {name: drone, labels: [73]}
+specified_colors:
+  - {name: floor, source: raw, color: [0.75, 0.75, 0.71]}
+  - {name: wall, source: raw, color: [0.0, 0.4, 0.2]}
+  - {name: ceiling, source: raw, color: [0.8, 0.0, 0.4]}

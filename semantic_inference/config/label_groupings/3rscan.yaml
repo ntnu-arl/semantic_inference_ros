@@ -1,0 +1,164 @@
+---
+name: 3rscan
+distinct: true
+offset: -1
+groups:
+- {labels: [1], name: armchair}
+- {labels: [2], name: backpack}
+- {labels: [3], name: bag}
+- {labels: [4], name: ball}
+- {labels: [5], name: bar}
+- {labels: [6], name: basin}
+- {labels: [7], name: basket}
+- {labels: [8], name: bath cabinet}
+- {labels: [9], name: bathtub}
+- {labels: [10], name: bed}
+- {labels: [11], name: bedside table}
+- {labels: [12], name: bench}
+- {labels: [13], name: bidet}
+- {labels: [14], name: bin}
+- {labels: [15], name: blanket}
+- {labels: [16], name: blinds}
+- {labels: [17], name: board}
+- {labels: [18], name: book}
+- {labels: [19], name: books}
+- {labels: [20], name: bookshelf}
+- {labels: [21], name: bottle}
+- {labels: [22], name: box}
+- {labels: [23], name: bread}
+- {labels: [24], name: bucket}
+- {labels: [25], name: cabinet}
+- {labels: [26], name: carpet}
+- {labels: [27], name: ceiling}
+- {labels: [28], name: chair}
+- {labels: [29], name: cleanser}
+- {labels: [30], name: clock}
+- {labels: [31], name: closet}
+- {labels: [32], name: clothes}
+- {labels: [33], name: clothes dryer}
+- {labels: [34], name: clutter}
+- {labels: [35], name: coffee machine}
+- {labels: [36], name: coffee table}
+- {labels: [37], name: commode}
+- {labels: [38], name: computer desk}
+- {labels: [39], name: couch}
+- {labels: [40], name: couch table}
+- {labels: [41], name: counter}
+- {labels: [42], name: cup}
+- {labels: [43], name: cupboard}
+- {labels: [44], name: curtain}
+- {labels: [46], name: cutting board}
+- {labels: [47], name: decoration}
+- {labels: [48], name: desk}
+- {labels: [49], name: dining chair}
+- {labels: [50], name: dining table}
+- {labels: [51], name: door}
+- {labels: [52], name: doorframe}
+- {labels: [53], name: drawer}
+- {labels: [54], name: drum}
+- {labels: [55], name: drying machine}
+- {labels: [56], name: extractor fan}
+- {labels: [57], name: fireplace}
+- {labels: [58], name: floor}
+- {labels: [59], name: flower}
+- {labels: [60], name: flowers}
+- {labels: [61], name: folder}
+- {labels: [62], name: food}
+- {labels: [63], name: footstool}
+- {labels: [64], name: frame}
+- {labels: [65], name: fruit plate}
+- {labels: [66], name: garbage}
+- {labels: [67], name: garbage bin}
+- {labels: [68], name: grass}
+- {labels: [69], name: hand dryer}
+- {labels: [70], name: heater}
+- {labels: [71], name: item}
+- {labels: [72], name: jacket}
+- {labels: [73], name: jar}
+- {labels: [74], name: kettle}
+- {labels: [75], name: kitchen appliance}
+- {labels: [76], name: kitchen cabinet}
+- {labels: [77], name: kitchen counter}
+- {labels: [78], name: kitchen hood}
+- {labels: [79], name: ladder}
+- {labels: [80], name: lamp}
+- {labels: [81], name: laptop}
+- {labels: [82], name: laundry basket}
+- {labels: [83], name: light}
+- {labels: [84], name: machine}
+- {labels: [85], name: magazine rack}
+- {labels: [86], name: menu}
+- {labels: [87], name: microwave}
+- {labels: [88], name: mirror}
+- {labels: [89], name: monitor}
+- {labels: [90], name: napkins}
+- {labels: [91], name: nightstand}
+- {labels: [92], name: object}
+- {labels: [93], name: objects}
+- {labels: [94], name: organizer}
+- {labels: [95], name: ottoman}
+- {labels: [96], name: oven}
+- {labels: [97], name: pack}
+- {labels: [98], name: pan}
+- {labels: [99], name: paper towel}
+- {labels: [100], name: papers}
+- {labels: [101], name: pc}
+- {labels: [102], name: picture}
+- {labels: [103], name: pile of books}
+- {labels: [104], name: pile of papers}
+- {labels: [45, 105], name: pillow}
+- {labels: [106], name: pipe}
+- {labels: [107], name: plant}
+- {labels: [108], name: plate}
+- {labels: [109], name: player}
+- {labels: [110], name: pot}
+- {labels: [111], name: printer}
+- {labels: [112], name: rack}
+- {labels: [113], name: radiator}
+- {labels: [114], name: recycle bin}
+- {labels: [115], name: refrigerator}
+- {labels: [116], name: rocking chair}
+- {labels: [117], name: scale}
+- {labels: [118], name: screen}
+- {labels: [119], name: shelf}
+- {labels: [120], name: shoe}
+- {labels: [121], name: shoe rack}
+- {labels: [122], name: shoes}
+- {labels: [123], name: showcase}
+- {labels: [124], name: shower}
+- {labels: [125], name: shower curtain}
+- {labels: [126], name: shower floor}
+- {labels: [127], name: shower wall}
+- {labels: [128], name: side table}
+- {labels: [129], name: sink}
+- {labels: [130], name: soap dish}
+- {labels: [131], name: socket}
+- {labels: [132, 133], name: sofa}
+- {labels: [134], name: stair}
+- {labels: [135], name: stand}
+- {labels: [136], name: stool}
+- {labels: [137], name: stove}
+- {labels: [138], name: stuffed animal}
+- {labels: [139], name: suitcase}
+- {labels: [140], name: table}
+- {labels: [141], name: table lamp}
+- {labels: [142], name: telephone}
+- {labels: [143], name: toaster}
+- {labels: [144], name: toilet}
+- {labels: [145], name: toilet brush}
+- {labels: [146], name: toilet paper}
+- {labels: [147], name: toilet paper dispenser}
+- {labels: [148], name: towel}
+- {labels: [149], name: trash can}
+- {labels: [150], name: trashcan}
+- {labels: [151], name: tube}
+- {labels: [152], name: tv}
+- {labels: [153], name: tv stand}
+- {labels: [154], name: vase}
+- {labels: [155], name: wall}
+- {labels: [156], name: wardrobe}
+- {labels: [157], name: washing machine}
+- {labels: [158], name: washing powder}
+- {labels: [159], name: window}
+- {labels: [160], name: windowsill}
+specified_colors: []

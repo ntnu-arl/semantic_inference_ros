@@ -1,0 +1,20 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>semantic_inference_msgs</name>
+  <version>0.0.1</version>
+  <description>ROS message definitions for semantic_inference</description>
+
+  <author email="na26933@mit.edu">Nathan Hughes</author>
+  <author email="albert.g.puigjaner@ntnu.no">Albert Gassol Puigjaner</author>
+  <maintainer email="albert.g.puigjaner@ntnu.no">Albert Gassol Puigjaner</maintainer>
+  <license>BSD</license>
+
+  <buildtool_depend>catkin</buildtool_depend>
+  <build_depend>message_generation</build_depend>
+  <exec_depend>message_runtime</exec_depend>
+  <depend>sensor_msgs</depend>
+  <depend>std_msgs</depend>
+
+  <export>
+  </export>
+</package>

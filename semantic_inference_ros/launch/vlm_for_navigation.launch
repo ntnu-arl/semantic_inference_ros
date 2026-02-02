@@ -1,0 +1,25 @@
+<launch>
+
+<arg name="verbose" default="true" doc="Show output via stdout"/>
+<arg name="python_env" default="$(find semantic_inference_python)/ros_semantics_env/bin/python" doc="Python environment for open vocab"/>
+<arg name="navigation_topic" default="/hydra_ros_node/navigation/object_search_output" doc="Name of the VLM for navigation node"/>
+<arg name="find_paths_service_name" default="/hydra_ros_node/navigation/find_paths" doc="Name of the find paths service"/>
+<arg name="evaluating_objects_topic" default="/hydra_ros_node/navigation/evaluating_objects" doc="Topic for evaluating objects"/>
+<arg name="reset_visualization_service" default="/hydra_dsg_visualizer/reset_object_search_coloring" doc="Service to reset visualization"/>
+<arg name="config_file" default="$(find semantic_inference_ros)/config/vlm_for_navigation.yaml" doc="Path to the configuration file"/>
+<arg name="llm_response_parser_prompt_path" default="$(find semantic_inference_python)/config/system_prompts/llm_response_parser_prompt.txt" doc="Path to the LLM response parser prompt"/>
+<arg name="colormap_path" default="$(find semantic_inference)/config/anymal.csv" doc="Visualization colormap"/>
+<arg name="use_cuda" default="true"/>
+<!-- launch-prefix="$(arg python_env)" -->
+<node pkg="semantic_inference_ros" type="vlm_for_navigation_node" name="vlm_for_navigation_node"
+      ns="semantic_inference" output="$(eval 'screen' if verbose else 'log')" required="false" launch-prefix="$(arg python_env)">
+      <remap from="/semantic_inference/navigation" to="$(arg navigation_topic)"/>
+      <remap from="/semantic_inference/find_paths" to="$(arg find_paths_service_name)"/>
+      <remap from="/semantic_inference/evaluating_objects" to="$(arg evaluating_objects_topic)"/>
+      <remap from="/semantic_inference/reset_visualization" to="$(arg reset_visualization_service)"/>
+      <param name="use_cuda" value="$(arg use_cuda)"/>
+      <rosparam command="load" file="$(arg config_file)" ns=""/>
+      <param name="vlm_reasoning/llm_response_parser_prompt_path" value="$(arg llm_response_parser_prompt_path)"/>
+      <param name="recolor/colormap_path" value="$(arg colormap_path)"/>
+</node>
+</launch>

@@ -1,0 +1,24 @@
+You will be given a natural language prompt describing a visual or spatial task.
+
+Your goal is to reason about the task in two steps:
+1. Identify relevant objects required to fulfill the task. Only select object names from the provided list.
+2. Determine whether the task requires reasoning about how objects physically interact — such as moving, placing, storing, supporting, or using one object with another. Be realistic about these interactions and which objects can be moved and which cannot.
+
+Your output must be in **JSON format** and include:
+- "objects": a list of relevant object names (only from the provided list)
+- "interactions": a dictionary of reasoning prompts about object interactions, if applicable
+
+Include "interactions" **if the task involves or implies**:
+- moving, placing, lifting, or removing objects,
+- storing items or determining suitable locations for them,
+- determining whether one object can support, contain, or obstruct another,
+- preparing a space by reasoning about spatial arrangements (e.g., clearing a surface or floor)
+
+When generating an interaction, only include object pairs where the second object enables or supports a meaningful physical interaction (e.g., placing one object on another, moving it out of the way, or using it to store/hide/support something). Avoid pairing objects arbitrarily. Do not generate an interaction if the second object plays no actual role in the scenario.
+
+Leave "interactions" empty only for tasks that **purely** ask to:
+- find, detect, or locate objects,
+- identify where objects might typically be found (without concern for feasibility),
+- classify or list relevant items
+
+Only use object names from this list:

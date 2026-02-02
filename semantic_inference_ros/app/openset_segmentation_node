@@ -1,0 +1,169 @@
+#!/usr/bin/env python3
+"""Node that runs openset segmentation."""
+from dataclasses import dataclass, field
+
+import rospy
+import time
+import semantic_inference_python.models as models
+import semantic_inference_ros
+import torch
+import numpy as np
+import cv2
+
+from semantic_inference_python import Config
+from semantic_inference_msgs.msg import FeatureImage, FeatureVectorStamped
+from sensor_msgs.msg import Image, CompressedImage, CameraInfo
+from semantic_inference_ros import Conversions, SyncImagesWorkerConfig, RecolorConfig
+
+
+@dataclass
+class OpensetSegmentationNodeConfig(Config):
+    """Configuration for ClipPublisherNode."""
+
+    worker: SyncImagesWorkerConfig = field(default_factory=SyncImagesWorkerConfig)
+    model: models.OpensetSegmenterConfig = field(
+        default_factory=models.OpensetSegmenterConfig
+    )
+    recolor: RecolorConfig = field(default_factory=RecolorConfig)
+    playback_mode: bool = False
+    print_inference_time: bool = False
+
+
+class OpensetSegmentationNode:
+    """Node to run openset segmentation."""
+
+    def __init__(self):
+        """Start subscriber and publisher."""
+        self.config = semantic_inference_ros.load_from_ros(
+            OpensetSegmentationNodeConfig, ns="~"
+        )
+
+        rospy.loginfo(f"'{rospy.get_name()}': Initializing with {self.config.show()}")
+        device = models.default_device(self.config.model.cuda)
+        self._recolor = semantic_inference_ros.Recolor(self.config.recolor)
+        id_to_name = {v: k for k, v in self._recolor.name_to_id.items()}
+        self._model = models.OpensetSegmenter(self.config.model, id_to_name)
+        self._model.to_device(device)
+        self.map1 = None
+        self.map2 = None
+        # self._model.eval()
+        rospy.loginfo(f"'{rospy.get_name()}': finished initializing!")
+
+        self._pub = rospy.Publisher("semantic/image_raw", FeatureImage, queue_size=1)
+        self._feature_image_color_pub_ = rospy.Publisher(
+            "semantic_color/feature_image", FeatureImage, queue_size=1
+        )
+        self._colored_image_pub_ = rospy.Publisher(
+            "semantic_color/image_raw", Image, queue_size=1
+        )
+        self._panoptic_image_pub = rospy.Publisher(
+            "panoptic/image_raw", Image, queue_size=1
+        )
+        self._clip_pub = rospy.Publisher(
+            "image_feature", FeatureVectorStamped, queue_size=1
+        )
+        self._debug_pub = rospy.Publisher("detections", Image, queue_size=1)
+
+        self._camera_info_sub = rospy.Subscriber(
+            "color/camera_info", CameraInfo, self.callback_camera_info
+        )
+        self._worker = semantic_inference_ros.SyncImagesWorker(
+            self.config.worker,
+            ["color/image_raw", "depth/image_raw"],
+            [Image, Image]
+            if not self.config.playback_mode
+            else [CompressedImage, CompressedImage],
+            self._spin_once,
+        )
+        # self._embedder = semantic_inference_ros.PromptEncoder(self._model.encoder)
+
+    def callback_camera_info(self, msg: CameraInfo):
+        """Callback for camera info."""
+        K = np.array(msg.K).reshape((3, 3))
+        D = np.array(msg.D)
+        image_size = (msg.width, msg.height)
+
+        self.map1, self.map2 = cv2.initUndistortRectifyMap(
+            K, D, None, K, image_size, cv2.CV_16SC2
+        )
+
+        rospy.loginfo("[Open vocabulary node] Undistortion maps initialized")
+
+        # Unsubscribe to save resources
+        self._camera_info_sub.unregister()
+
+    def _spin_once(self, header, img: np.ndarray, depth: np.ndarray):
+        start_time = time.time()
+        if self.map1 is None or self.map2 is None:
+            rospy.logwarn(
+                "[Open vocabulary node] Undistortion maps not initialized yet. Skipping processing."
+            )
+            return
+        img = cv2.remap(img, self.map1, self.map2, interpolation=cv2.INTER_LINEAR)
+        depth = cv2.remap(depth, self.map1, self.map2, interpolation=cv2.INTER_LINEAR)
+
+        if depth.dtype == np.uint16:
+            depth = depth.astype(np.float32) / 1000.0  # Convert to meters
+        elif depth.dtype != np.float32:
+            rospy.logerr(
+                f"[Open vocabulary node] Depth image has unsupported dtype {depth.dtype}. Expected uint16 or float32."
+            )
+            return
+        with torch.no_grad():
+            ret, debug_img = self._model.segment(
+                img, depth, colors=self._recolor.get_colorpalette(), is_rgb_order=True
+            )
+        if self.config.print_inference_time:
+            rospy.loginfo(
+                f"[Open vocabulary node] Inference time for image {header.seq}: {(time.time() - start_time) * 1000:.3f} ms"
+            )
+
+        msg = Conversions.to_feature_image(header, ret)
+        self._pub.publish(msg)
+        self._clip_pub.publish(
+            Conversions.to_stamped_feature(header, ret.image_embedding)
+        )
+        if debug_img is not None:
+            self._debug_pub.publish(
+                Conversions.to_sensor_image(debug_img, header=header, encoding="rgb8")
+            )
+        if ret.labels is not None:
+            msg = Conversions.to_colored_feature_image(
+                header, ret, self._recolor.recolor_image(ret.masks, ret.labels)
+            )
+            self._panoptic_image_pub.publish(
+                Conversions.to_sensor_image(
+                    ret.panoptic_image.numpy().astype(np.int16), header=header
+                )
+            )
+            self._feature_image_color_pub_.publish(msg)
+            self._colored_image_pub_.publish(msg.image)
+        else:
+            self._panoptic_image_pub.publish(
+                Conversions.to_sensor_image(
+                    np.zeros((img.shape[0], img.shape[1]), dtype=np.int16),
+                    header=header,
+                )
+            )
+            msg = Conversions.to_colored_feature_image(
+                header, ret, np.zeros((img.shape[0], img.shape[1], 3), dtype=np.uint8)
+            )
+            self._feature_image_color_pub_.publish(msg)
+            self._colored_image_pub_.publish(msg.image)
+
+    def spin(self):
+        """Wait until ros shuts down."""
+        self._worker.spin()
+
+
+def main():
+    """Start a node."""
+    rospy.init_node("openset_segmentation_node")
+    semantic_inference_ros.setup_ros_log_forwarding()
+
+    node = OpensetSegmentationNode()
+    node.spin()
+
+
+if __name__ == "__main__":
+    main()

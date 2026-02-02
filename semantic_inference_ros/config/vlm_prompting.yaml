@@ -1,0 +1,15 @@
+vlm_prompt:
+  type: instruct_blip # instruct_blip_visual, deepseek
+  model_name: Salesforce/instructblip-vicuna-7b
+  model_path: ""
+  # BLIP: Salesforce/instructblip-flan-t5-xl,
+  #       Salesforce/instructblip-flan-t5-xxl,
+  #       Salesforce/instructblip-vicuna-7b,
+  #       Salesforce/instructblip-vicuna-13b
+  # DeepSeek: deepseek-ai/deepseek-vl2-tiny,
+  #           deepseek-ai/deepseek-vl2-small,
+  #           deepseek-ai/deepseek-vl2
+  use_cuda: True
+  cuda_batch_size: 2
+  cropping: False
+geometry: none

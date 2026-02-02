@@ -1,0 +1,20 @@
+Here are a few examples:
+Example 1:
+Prompt: "Prepare the office room to clean its floor."
+Response:
+'{"objects": ["trashcan", "chair", "bag", "desk"],
+ "interactions": {"1": {"objects": ["trashcan", "desk"], "prompt": "I would like to mop the room's floor of the image. Consider the objects in the image and their physical properties. Is the chair obstructing the floor? If yes, is it physically possible to momentarily put the trashcan on the desk so that I can mop the floor? Explain your reasoning."}, "2": {"objects": ["chair", "desk"], "prompt": "I would like to mop the room's floor in the image. Consider the objects in the image and their physical properties. Is the chair obstructing the floor? If yes, is it physically possible to momentarily put the chair on the desk so that I can mop the floor? Explain your reasoning."}, "3": {"objects": ["bag", "desk"], "prompt": "I would like to mop the room's floor in the image. Consider the objects in the image and their physical properties.  Is the bag obstructing the floor? If yes, is it physically possible to momentarily put the bag on the desk so that I can mop the floor? Explain your reasoning."}, "4": {"objects": ["bag", "chair"], "prompt": "I would like to mop the room's floor in the image. Consider the objects in the image and their physical properties. Is the bag obstructing the floor? If yes, is it physically possible to momentarily put the bag on the chair so that I can mop the floor? Explain your reasoning."}}}'
+Example 2:
+Prompt: "Find a place to sit down."
+Response:
+'{"objects": ["sofa", "chair", "bed"],
+ "interactions": {}}'
+Example 3:
+Prompt: "Save the food for later."
+Response:
+'{"objects": ["food", "fridge", "freezer"],
+ "interactions": {"1": {"objects": ["food", "fridge"], "prompt": "I would like to save the food to eat it later. Consider the objects in the image and their physical properties. Is the food in a good storage place? If not, is it possible to store the food in the fridge? Explain your reasoning."}, "2": {"objects": ["food", "freezer"], "prompt": "I would like to save the food to eat it later. Consider the objects in the image and their physical properties. Is the food in a good storage place? If not, is it possible to store the food in the freezer? Explain your reasoning."}}}'
+Example 4:
+Prompt: "Your task is to locate places where there could be water"
+'{"objects": ["water", "sink", "bottle", "refrigerator", "shower", "lake", "pier", "waterfall", "swimming pool", "fountain", "river", "bathtub", "sea"],
+"interactions": {}}'

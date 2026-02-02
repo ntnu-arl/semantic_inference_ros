@@ -1,0 +1,179 @@
+<launch>
+    <!-- Replay mode false by default -->
+    <arg name="playback_mode" default="false" doc="Run in playback mode with compressed images"/>
+    <arg name="print_inference_time" default="false" doc="Print inference time"/>
+    <!-- Start_manager required if used stand-alone -->
+    <arg name="start_manager" default="true" doc="Start a separate nodelet manager"/>
+    <arg name="nodelet_manager" default="nodelet_manager" doc="Name of nodelet manager"/>
+    <!-- Launch file features -->
+    <arg name="debug" default="false" doc="Run segmentation with gdb"/>
+    <arg name="launch-prefix" default="$(eval 'gdb -ex run --args' if debug else '')" doc="Launch prefix for nodelet manager"/>
+    <arg name="verbose" default="true" doc="Set segmentation log output to stdout"/>
+    <arg name="use_prerecorded_semantics" default="false" doc="Remap prerecorded labels instead of running inference"/>
+    <arg name="force_rebuild" default="false" doc="Force TensorRT to rebuild engine file"/>
+    <!-- Input configuration -->
+    <arg name="rgb_image_transport" default="raw" doc="Input image transport type"/>
+    <arg name="max_image_queue_size" default="1" doc="Max number of images to store"/>
+    <arg name="min_separation_s" default="0.7" doc="Enforced separation between input images"/>
+    <arg name="rotation_type" default="none" doc="Input camera rotation"/>
+    <arg name="labelspace_dir" default="$(find hydra)/config/label_spaces"/>
+    <arg name="labelspace_name" default="ade20k_full" doc="Name of the label space to use"/>
+    <arg name="camera_info_topic" default="/camera/color/camera_info"/>
+
+    <arg name="active_object_edges_topic" default="/hydra_ros_node/backend/active_object_edges" doc="Topic for active object edges"/>
+    <arg name="odom_frame" default="world" doc="World frame for VLM node"/>
+    <arg name="sensor_frame" default="camera_color_optical_frame" doc="Camera frame for VLM node"/>
+    <!-- Colormap and label grouping -->
+    <arg name="colormap_path" default="$(find semantic_inference)/config/distinct_150_colors.csv" doc="Visualization colormap"/>
+
+    <!-- Open vocab -->
+    <arg name="open_vocab" default="true" doc="Use open vocabulary for segmentation"/>
+    <arg name="segmentation_cuda" default="true" doc="Use CUDA for open vocab segmentation"/>
+
+    <!-- VLM -->
+    <arg name="use_vlm" default="true" doc="Use VLM for relationships"/>
+    <arg name="labels_from_prompt" default="false" doc="Get VLM labels from prompt"/>
+    <arg name="visual_relationships_encodings_topic" default="/hydra_ros_node/backend/vlm_relationships/visual_relationships_encodings"/>
+    <arg name="config_path_vlm" default="$(find semantic_inference_ros)/config/vlm.yaml" doc="Configuration file for object detector"/>
+    <arg name="vlm_labels_from_prompt_config_path" default="$(find semantic_inference_ros)/config/vlm_prompting.yaml" doc="Configuration file for VLM prompting"/>
+    <arg name="pub_vlm_annotations" default="true" doc="Publish VLM annotations"/>
+    <arg name="height" default="720" doc="Height of the input image"/>
+    <arg name="width" default="1280" doc="Width of the input image"/>
+    <arg name="vlm_queue_size" default="100" doc="Queue size for VLM node"/>
+    <arg name="vlm_cuda" default="true" doc="Use CUDA for VLM inference"/>
+
+    <!-- YOLO+SAM config -->
+    <arg name="config_path" default="$(find semantic_inference_ros)/config/openset_segmentation.yaml" doc="Configuration file for object detector"/>
+    <arg name="semantic_labels_path" default="$(find semantic_inference)/config/label_groupings/$(arg labelspace_name).yaml"/>
+    <arg name="yolo_model_name" default="yoloe-11l-seg.pt" doc="Name of the YOLO model to use"/>
+    <arg name="python_env" default="$(find semantic_inference_python)/ros_semantics_env/bin/python" doc="Python environment for open vocab"/>
+
+    <!-- segmentation model options. Make sure you have one downloaded -->
+    <!--<arg name="segmentation_model" default="mobilenetv2_360_640"/>-->
+    <!--<arg name="segmentation_model" default="hrnetv2_360_640_v12"/>-->
+    <!--<arg name="segmentation_model" default="efficientvit_seg_l2"/>-->
+    <!--<arg name="segmentation_model" default="ade20k-hrnetv2-c1"/>-->
+    <!--<arg name="segmentation_model" default="ade20k-mobilnetv2dilated-c1_deepsup"/>-->
+    <arg name="segmentation_model" default="yoloe" doc="Model name to use"/>
+
+    <!-- Check if segmentation_model is not yolosam -->
+    <arg name="use_segmentation_nodelets" default="$(eval segmentation_model != 'yolosam' and segmentation_model != 'yoloe')" doc="Condition to start segmentation nodelets"/>
+
+    <!-- Nodelet manager -->
+    <group if="$(arg start_manager)" >
+        <group if="$(arg use_segmentation_nodelets)">
+            <node pkg="nodelet" type="nodelet" name="$(arg nodelet_manager)"
+                args="manager"
+                launch-prefix="$(arg launch-prefix)"
+                output="$(eval 'screen' if verbose else 'log')"
+                required="false">
+            <param name="image_transport" value="$(arg rgb_image_transport)"/>
+            </node>
+        </group>
+    </group>
+
+    <!-- Closed-set 2D semantic segmentation -->
+    <group unless="$(arg use_prerecorded_semantics)">
+        <group if="$(arg use_segmentation_nodelets)">
+            <node pkg="nodelet" type="nodelet" name="semantic_inference"
+                args="load semantic_inference/segmentation $(arg nodelet_manager) --no-bond"
+                output="$(eval 'screen' if verbose else 'log')"
+                required="false">
+                <rosparam command="load" file="$(find semantic_inference)/config/models/$(arg segmentation_model).yaml"/>
+                <rosparam command="load" file="$(find semantic_inference)/config/label_groupings/$(arg labelspace_name).yaml" ns="output/recolor"/>
+                <param name="segmenter/model/model_file" value="$(find semantic_inference)/models/$(arg segmentation_model).onnx"/>
+                <param name="segmenter/model/engine_file" value="$(find semantic_inference)/engines/$(arg segmentation_model).trt"/>
+                <param name="segmenter/model/force_rebuild" value="$(arg force_rebuild)"/>
+                <param name="output/recolor/colormap_path" value="$(arg colormap_path)"/>
+                <param name="output/open_vocab" value="$(arg open_vocab)"/>
+                <param name="worker/max_queue_size" value="$(arg max_image_queue_size)"/>
+                <param name="worker/image_separation_s" value="$(arg min_separation_s)"/>
+                <param name="image_rotator/rotation" value="$(arg rotation_type)"/>
+            </node>
+        </group>
+    </group>
+
+    <!-- Open-set 2D semantic segmentation -->
+    <group unless="$(arg use_prerecorded_semantics)">
+        <group unless="$(arg use_segmentation_nodelets)">
+            <node pkg="semantic_inference_ros" type="openset_segmentation_node" name="semantic_inference" ns="semantic_inference"
+                    output="$(eval 'screen' if verbose else 'log')" required="false" launch-prefix="$(arg python_env)">
+                <rosparam file="$(arg config_path)" ns="model"/>
+                <rosparam file="$(arg labelspace_dir)/$(arg labelspace_name)_label_space.yaml" ns="model"/>
+                <rosparam file="$(find semantic_inference)/config/label_groupings/$(arg labelspace_name).yaml" ns="model/segmentation"/>
+                <param name="model/segmentation/yolo_model_name" value="$(arg yolo_model_name)"/>
+                <param name="model/cuda" value="$(arg segmentation_cuda)"/>
+                <param name="worker/min_separation_s" value="$(arg min_separation_s)"/>
+                <param name="model/segmentation/type" value="$(arg segmentation_model)"/>
+                <param name="recolor/colormap_path" value="$(arg colormap_path)"/>
+                <param name="playback_mode" value="$(arg playback_mode)"/>
+                <param name="print_inference_time" value="$(arg print_inference_time)"/>
+                <remap from="/semantic_inference/color/camera_info" to="$(arg camera_info_topic)"/>
+            </node>
+        </group>
+    </group>
+
+    <!-- Reampping for pre-recorded labels -->
+    <group if="$(arg use_prerecorded_semantics)">
+        <node pkg="nodelet" type="nodelet" name="semantic_inference"
+              args="load semantic_inference/recolor $(arg nodelet_manager) --no-bond"
+              output="$(eval 'screen' if verbose else 'log')"
+              required="false">
+            <rosparam command="load" file="$(find semantic_inference)/config/label_groupings/$(arg labelspace_name).yaml" ns="output/recolor"/>
+            <param name="worker/max_queue_size" value="$(arg max_image_queue_size)"/>
+            <param name="worker/image_separation_s" value="$(arg min_separation_s)"/>
+        </node>
+    </group>
+
+    <!-- Open vocab features -->
+    <group if="$(arg open_vocab)">
+        <group if="$(arg use_segmentation_nodelets)">
+            <group unless="$(arg use_prerecorded_semantics)">
+                <node pkg="semantic_inference_ros" type="clip_features_node" name="clip_features_node" ns="semantic_inference"
+                    launch-prefix="$(arg python_env)" output="$(eval 'screen' if verbose else 'log')"
+                    required="false">
+                    <rosparam file="$(arg config_path)" ns="model"/>
+                    <rosparam file="$(arg labelspace_dir)/$(arg labelspace_name)_label_space.yaml" ns="model"/>
+                    <param name="worker/min_separation_s" value="$(arg min_separation_s)"/>
+                    <param name="recolor/colormap_path" value="$(arg colormap_path)"/>
+                    <param name="playback_mode" value="$(arg playback_mode)"/>
+                    <remap from="/semantic_inference/color/camera_info" to="$(arg camera_info_topic)"/>
+                </node>
+            </group>
+        </group>
+    </group>
+
+    <!-- VLM features node-->
+    <node pkg="semantic_inference_ros" type="vlm_features_node" name="vlm_features_node" ns="semantic_inference" if="$(arg use_vlm)"
+          output="$(eval 'screen' if verbose else 'log')" required="false" launch-prefix="$(arg python_env)">
+        <rosparam file="$(arg config_path_vlm)" ns="model"/>
+        <rosparam file="$(arg labelspace_dir)/$(arg labelspace_name)_label_space.yaml" ns="model"/>
+        <param name="model/publish_masks" value="$(arg pub_vlm_annotations)"/>
+        <param name="model/vlm/height" value="$(arg height)"/>
+        <param name="model/vlm/width" value="$(arg width)"/>
+        <param name="model/cuda" value="$(arg vlm_cuda)"/>
+        <param name="recolor/colormap_path" value="$(arg colormap_path)"/>
+        <param name="worker/min_separation_s" value="$(arg min_separation_s)"/>
+        <param name="worker/queue_size" value="$(arg vlm_queue_size)"/>
+        <param name="playback_mode" value="$(arg playback_mode)"/>
+        <param name="world_frame" value="$(arg odom_frame)"/>
+        <param name="camera_frame" value="$(arg sensor_frame)"/>
+        <param name="print_inference_time" value="$(arg print_inference_time)"/>
+        <remap from="/semantic_inference/color/camera_info" to="$(arg camera_info_topic)"/>
+        <remap from="/semantic_inference/active_object_edges" to="$(arg active_object_edges_topic)"/>
+    </node>
+    <!-- VLM prompting to get relationship labels -->
+    <node pkg="semantic_inference_ros" type="encode_vlm_labels_node" name="encode_vlm_labels_node" ns="semantic_inference" if="$(arg labels_from_prompt)"
+          launch-prefix="$(arg python_env)" output="$(eval 'screen' if verbose else 'log')" required="false">
+          <remap from="/semantic_inference/visual_relationships_encodings" to="$(arg visual_relationships_encodings_topic)"/>
+          <rosparam file="$(arg vlm_labels_from_prompt_config_path)"/>
+          <param name="vlm/height" value="$(arg height)"/>
+          <param name="vlm/width" value="$(arg width)"/>
+    </node>
+    <!-- Dummy VLM features node -->
+    <node pkg="semantic_inference_ros" type="dummy_vlm_node" name="dummy_vlm_node" ns="semantic_inference" unless="$(arg use_vlm)"
+        launch-prefix="$(arg python_env)" output="$(eval 'screen' if verbose else 'log')" required="false">
+        <param name="worker/min_separation_s" value="$(arg min_separation_s)"/>
+        <param name="playback_mode" value="$(arg playback_mode)"/>
+    </node>
+</launch>

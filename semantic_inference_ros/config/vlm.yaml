@@ -1,0 +1,25 @@
+---
+max_batch_vlm: 2
+min_area: 300
+min_depth: 0.1
+full_img: False
+crop_img_to_bb: False
+dense_representation_radius_m: 7.0
+verbose: False
+include_bbs: True
+use_graph_edges: False
+
+vlm:
+  type: instruct_blip_visual # instruct_blip_visual
+  model_name: Salesforce/instructblip-vicuna-7b
+  # model_path: PATH_TO_DS_VISUAL_MODEL
+  # processor_path: deepseek-ai/deepseek-vl2
+  # BLIP: Salesforce/instructblip-flan-t5-xl,
+  #       Salesforce/instructblip-flan-t5-xxl,
+  #       Salesforce/instructblip-vicuna-7b,
+  #       Salesforce/instructblip-vicuna-13b
+  # DeepSeek: deepseek-ai/deepseek-vl2-tiny,
+  #           deepseek-ai/deepseek-vl2-small,
+  #           deepseek-ai/deepseek-vl2
+  cropping: False
+  cuda_batch_size: 2

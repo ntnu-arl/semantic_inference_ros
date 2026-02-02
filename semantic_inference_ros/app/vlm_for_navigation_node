@@ -1,0 +1,414 @@
+#!/usr/bin/env python3
+"""VLM for navigation node."""
+from dataclasses import dataclass, field
+from enum import Enum
+from tqdm import trange, tqdm
+
+import rospy
+import time
+import torch
+from typing import Any
+
+from semantic_inference_python import Config, config_field
+import semantic_inference_python.models as models
+import semantic_inference_ros
+from semantic_inference_msgs.msg import (
+    VlmForNavigationDebug,
+    VlmForNavigationRelationshipOutput,
+)
+from hydra_msgs.msg import ObjectSearch
+from hydra_msgs.srv import GetNavigationRequest, GetNavigation
+from std_srvs.srv import Empty, EmptyResponse, EmptyRequest
+from std_msgs.msg import UInt64MultiArray
+from dynamic_reconfigure.server import Server
+from semantic_inference_ros.cfg import VLMForNavigationConfig as VLMDynReconfig
+
+from semantic_inference_ros import SubscriberWorkerConfig, RecolorConfig
+
+
+class Mode(Enum):
+    """Mode for VLM for navigation."""
+
+    ALL = "all"
+    ONE_BY_ONE = "one_by_one"
+    ONE_BY_ONE_TRIGGERED = "one_by_one_triggered"
+
+
+@dataclass
+class VLMForNavigationNodeConfig(Config):
+    """Configuration for VLMForNavigationNode."""
+
+    worker: SubscriberWorkerConfig = field(default_factory=SubscriberWorkerConfig)
+    vlm_reasoning: Any = field(default_factory=models.VLMForNavigationConfig)
+    recolor: RecolorConfig = field(default_factory=RecolorConfig)
+    use_cuda: bool = True
+    find_paths_method: str = "dijkstra"
+    mode: Mode = Mode.ALL
+
+
+class VLMForNavigationNode:
+    """Node to run VLM for navigation."""
+
+    def __init__(self):
+        """Start subscriber, publisher, initialize model and spining thread."""
+        # Load configuration and initialize model
+        self.config = semantic_inference_ros.load_from_ros(
+            VLMForNavigationNodeConfig, ns="~"
+        )
+        self._initialized = False
+        rospy.loginfo(f"'{rospy.get_name()}': Initializing with {self.config.show()}")
+        device = models.default_device(self.config.use_cuda)
+        self._vlm_reasoning = models.VLMForNavigation(self.config.vlm_reasoning)
+        self._vlm_reasoning.move_to(device)
+        self._recolor = semantic_inference_ros.Recolor(self.config.recolor)
+        # Initialize service proxy
+        rospy.wait_for_service("find_paths")
+        rospy.wait_for_service("reset_visualization")
+        self._find_paths = rospy.ServiceProxy("find_paths", GetNavigation)
+        self._reset_visualization = rospy.ServiceProxy("reset_visualization", Empty)
+        # Debug publisher
+        self._debug_pub = rospy.Publisher(
+            "vlm_for_navigation_debug", VlmForNavigationDebug, queue_size=1
+        )
+        # RViz publisher for visualization
+        self._rviz_pub = rospy.Publisher(
+            "evaluating_objects", UInt64MultiArray, queue_size=1
+        )
+
+        # Create a service to set a flag to publish the current results
+        rospy.Service(
+            "~publish_current", Empty, lambda _: self._set_publish_current(True)
+        )
+
+        # Service to trigger one-by-one processing
+        self.process_next = False
+        self.objects_to_process = 0
+        rospy.Service("~process_next", Empty, lambda _: self._set_process_next(True))
+
+        # Service to repeat processing
+        rospy.Service(
+            "~repeat_processing", Empty, lambda _: self._set_repeat_processing(True)
+        )
+        self.repeat = False
+
+        # Service to stop processing
+        rospy.Service(
+            "~stop_processing", Empty, lambda _: self._set_stop_processing(True)
+        )
+        self.stop_processing = False
+
+        # Initialize dynamic reconfig
+        self._dyn_reconf_server = Server(VLMDynReconfig, self._dynamic_reconf_callback)
+
+        # Initialize worker
+        self._worker = semantic_inference_ros.SubscriberWorker(
+            self.config.worker, "navigation", ObjectSearch, self._spin_once
+        )
+        # Print service topic and subscriber topic
+        rospy.loginfo(f"'{rospy.get_name()}': finished initializing!")
+        rospy.loginfo(f"Device {self._vlm_reasoning.device} is used for inference.")
+
+    def _set_process_next(self, value: bool) -> bool:
+        """Set a flag to process the next object in one-by-one mode."""
+        if self.config.mode == Mode.ONE_BY_ONE_TRIGGERED:
+            if value and self.objects_to_process <= 0:
+                rospy.logerr(
+                    "[vlm_for_navigation] Cannot process next object, no objects to process."
+                )
+                self.process_next = False
+                return EmptyResponse()
+            self.process_next = value
+            rospy.loginfo(f"[vlm_for_navigation] Process next set to {value}.")
+        else:
+            rospy.logerr(
+                "[vlm_for_navigation] Process next is only applicable in ONE_BY_ONE_TRIGGERED mode."
+            )
+        return EmptyResponse()
+
+    def _set_publish_current(self, value: bool) -> bool:
+        """Set a flag to publish the current results."""
+        if value and self.objects_to_process <= 0:
+            rospy.logerr(
+                "[vlm_for_navigation] Cannot publish current results, no objects to process."
+            )
+            self._vlm_reasoning.publish_current = False
+            return EmptyResponse()
+        elif not value:
+            self._vlm_reasoning.publish_current = False
+            return EmptyResponse()
+        rospy.loginfo("[vlm_for_navigation]Publishing current results.")
+        self._vlm_reasoning.publish_current = value
+        return EmptyResponse()
+
+    def _set_repeat_processing(self, value: bool) -> bool:
+        """Set a flag to repeat processing of the current object."""
+        if value and self.objects_to_process <= 0:
+            rospy.logerr(
+                "[vlm_for_navigation] Cannot repeat processing, no objects to process."
+            )
+            self.repeat = False
+            return EmptyResponse()
+        self.repeat = value
+        rospy.loginfo(f"[vlm_for_navigation] Repeat processing set to {value}.")
+        return EmptyResponse()
+
+    def _set_stop_processing(self, value: bool) -> bool:
+        """Set a flag to stop processing."""
+        if value and self.objects_to_process <= 0:
+            rospy.logerr(
+                "[vlm_for_navigation] Cannot stop processing, no objects to process."
+            )
+            self.stop_processing = False
+            return EmptyResponse()
+        self.stop_processing = value
+        rospy.loginfo(f"[vlm_for_navigation] Stop processing set to {value}.")
+        return EmptyResponse()
+
+    def _dynamic_reconf_callback(self, config, level):
+        """Callback for dynamic reconfigure to change mode."""
+        if not self._initialized:
+            self._initialized = True
+            return config
+        try:
+            new_mode = Mode(config.mode)
+            rospy.loginfo(f"[vlm_for_navigation] Mode changed to: {new_mode}")
+            self.config.mode = new_mode
+        except ValueError:
+            rospy.logerr(f"[vlm_for_navigation] Invalid mode received: {config.mode}")
+
+        try:
+            self._vlm_reasoning.client.config.deterministic = config.deterministic_vlm
+            rospy.loginfo(
+                f"[vlm_for_navigation] Deterministic VLM set to: {self._vlm_reasoning.client.config.deterministic}"
+            )
+        except AttributeError:
+            rospy.logerr(
+                "[vlm_for_navigation] VLM client configuration does not have 'deterministic' attribute."
+            )
+        return config
+
+    def _spin_once(self, msg: ObjectSearch) -> None:
+        """Process a single message."""
+        rospy.logwarn(
+            f"Received ObjectSearch message with {len(msg.object_ids)} objects."
+        )
+        if len(msg.object_ids) == 0:
+            rospy.logwarn("No objects found in ObjectSearch message.")
+            return
+        inputs = models.VLMForNavigationInput(general_prompt=msg.general_prompt)
+        for i in range(len(msg.object_ids)):
+            object_input = models.ObjectInput(
+                id=msg.object_ids[i],
+                relation_ids=torch.stack(
+                    [
+                        torch.tensor(
+                            [msg.features[i].ids[2 * j], msg.features[i].ids[2 * j + 1]]
+                        )
+                        for j in range(len(msg.features[i].feature))
+                    ]
+                ),
+                object_labels=[
+                    (msg.features[i].labels[2 * j], msg.features[i].labels[2 * j + 1])
+                    for j in range(len(msg.features[i].feature))
+                ],
+                object_colors=[
+                    (
+                        self._recolor.get_color_name_from_name(
+                            msg.features[i].labels[2 * j]
+                        ),
+                        self._recolor.get_color_name_from_name(
+                            msg.features[i].labels[2 * j + 1]
+                        ),
+                    )
+                    for j in range(len(msg.features[i].feature))
+                ],
+                relation_features=torch.stack(
+                    [
+                        torch.tensor(feature.data)
+                        .reshape(feature.rows, feature.cols)
+                        .to(self._vlm_reasoning.device)
+                        for feature in msg.features[i].feature
+                    ]
+                ),
+                num_observations=msg.features[i].num_observations,
+                prompts=msg.features[i].prompt,
+            )
+            inputs.object_inputs.append(object_input)
+        self.objects_to_process = len(inputs.object_inputs)
+        if self.config.mode == Mode.ALL:
+            self._process_all(inputs)
+        elif self.config.mode == Mode.ONE_BY_ONE:
+            self._process_one_by_one(inputs)
+        elif self.config.mode == Mode.ONE_BY_ONE_TRIGGERED:
+            self._process_one_by_one_triggered(inputs)
+        else:
+            rospy.logerr(f"Unknown mode: {self.config.mode}")
+        self.objects_to_process = 0
+        self._reset_visualization(EmptyRequest())
+
+    def _process_all(self, inputs: models.VLMForNavigationInput) -> None:
+        rospy.logwarn(
+            f"VLM navigation inference with {len(inputs.object_inputs)} objects."
+        )
+        start_time = time.time()
+        output = self._vlm_reasoning.reason(inputs)
+        rospy.logwarn(
+            f"VLM navigation inference time: {(time.time() - start_time) * 1000:.3f} ms"
+        )
+        print(output)
+        self._publish_debug(output)
+        if len(output.selected_object_ids) > 0:
+            request = GetNavigationRequest(
+                object_ids=[
+                    object_id.item() for object_id in output.selected_object_ids
+                ],
+                explanation=output.selected_explanations,
+                method=self.config.find_paths_method,
+            )
+
+            self._find_paths(request)
+
+    def _process_one_by_one(self, inputs: models.VLMForNavigationInput) -> None:
+        for i in trange(len(inputs.object_inputs)):
+            object_input = inputs.object_inputs[i]
+            rospy.loginfo(f"VLM navigation inference for object {object_input.id}.")
+            rviz_msg = UInt64MultiArray()
+            rviz_msg.data = [
+                object_input.relation_ids[i, 1].item()
+                for i in range(object_input.relation_ids.shape[0])
+            ]
+            rviz_msg.data.append(object_input.id)
+            self._rviz_pub.publish(rviz_msg)
+            # Print the labels of each pair and their number of observations
+            for j in range(len(object_input.object_labels)):
+                rospy.loginfo(
+                    f"Object {object_input.object_labels[j][0]} - Relation {object_input.object_labels[j][1]}: "
+                    f"number of observations --> {object_input.num_observations[j]}"
+                )
+            start_time = time.time()
+            output = self._vlm_reasoning.reason_one(object_input, inputs.general_prompt)
+            rospy.logwarn(
+                f"VLM navigation inference time: {(time.time() - start_time) * 1000:.3f} ms"
+            )
+            print(output)
+            self._publish_debug(output)
+            if len(output.selected_object_ids) > 0:
+                request = GetNavigationRequest(
+                    object_ids=[
+                        object_id.item() for object_id in output.selected_object_ids
+                    ],
+                    explanation=output.selected_explanations,
+                    method=self.config.find_paths_method,
+                )
+                self._find_paths(request)
+            if self._vlm_reasoning.publish_current:
+                self._set_publish_current(False)
+                rospy.logwarn(
+                    f"Stopping inference early after processing {i + 1}/{len(inputs.object_inputs)} objects."
+                )
+                return
+            self.objects_to_process -= 1
+
+    def _process_one_by_one_triggered(
+        self, inputs: models.VLMForNavigationInput
+    ) -> None:
+
+        current_index = 0
+        pbar = tqdm(total=len(inputs.object_inputs), desc="Processing objects")
+        while current_index < len(inputs.object_inputs) and not self.stop_processing:
+            if not self.process_next and current_index == 0:
+                rospy.loginfo("Waiting for process_next to be set to True.")
+                while not self.process_next:
+                    time.sleep(0.1)
+            object_input = inputs.object_inputs[current_index]
+            rospy.loginfo(f"VLM navigation inference for object {object_input.id}.")
+            rviz_msg = UInt64MultiArray()
+            rviz_msg.data = [
+                object_input.relation_ids[i, 1].item()
+                for i in range(object_input.relation_ids.shape[0])
+            ]
+            rviz_msg.data.append(object_input.id)
+            self._rviz_pub.publish(rviz_msg)
+            for j in range(len(object_input.object_labels)):
+                rospy.loginfo(
+                    f"Object {object_input.object_labels[j][0]} - Relation {object_input.object_labels[j][1]}: "
+                    f"number of observations --> {object_input.num_observations[j]}"
+                )
+            start_time = time.time()
+            output = self._vlm_reasoning.reason_one(object_input, inputs.general_prompt)
+            rospy.logwarn(
+                f"VLM navigation inference time: {(time.time() - start_time) * 1000:.3f} ms"
+            )
+            print(output)
+            self._publish_debug(output)
+            if len(output.selected_object_ids) > 0:
+                request = GetNavigationRequest(
+                    object_ids=[
+                        object_id.item() for object_id in output.selected_object_ids
+                    ],
+                    explanation=output.selected_explanations,
+                    method=self.config.find_paths_method,
+                )
+                self._find_paths(request)
+            self._set_process_next(False)
+            if not self.process_next:
+                rospy.loginfo("Waiting for process_next to be set to True.")
+                while not self.process_next:
+                    time.sleep(0.1)
+            if not self.repeat:
+                self.objects_to_process -= 1
+                current_index += 1
+                pbar.update(1)
+            else:
+                rospy.loginfo(f"Repeating processing for object {object_input.id}.")
+                self._set_repeat_processing(False)
+
+        pbar.close()
+
+        if self.stop_processing:
+            rospy.logwarn("Stopping processing due to stop_processing flag.")
+            self._set_stop_processing(False)
+            self._set_process_next(False)
+            self._set_repeat_processing(False)
+            self.objects_to_process = 0
+
+    def _publish_debug(self, output: models.VLMForNavigationOutput) -> None:
+        """Publish debug information."""
+        msg = VlmForNavigationDebug()
+        msg.header.stamp = rospy.Time.now()
+
+        for i in range(len(output.selected_explanations)):
+            relationship_output = VlmForNavigationRelationshipOutput()
+            relationship_output.object_id = output.selected_object_ids[2 * i].item()
+            relationship_output.target_id = output.selected_object_ids[2 * i + 1].item()
+            relationship_output.response = output.selected_explanations[i]
+            relationship_output.prompt = output.selected_prompts[i]
+            msg.selected.append(relationship_output)
+        for i in range(len(output.non_selected_explanations)):
+            relationship_output = VlmForNavigationRelationshipOutput()
+            relationship_output.object_id = output.non_selected_object_ids[2 * i].item()
+            relationship_output.target_id = output.non_selected_object_ids[
+                2 * i + 1
+            ].item()
+            relationship_output.response = output.non_selected_explanations[i]
+            relationship_output.prompt = output.non_selected_prompts[i]
+            msg.unselected.append(relationship_output)
+
+        self._debug_pub.publish(msg)
+
+    def spin(self):
+        """Wait until ros shuts down."""
+        self._worker.spin()
+
+
+def main():
+    """Start a node."""
+    rospy.init_node("vlm_for_navigation_node")
+    semantic_inference_ros.setup_ros_log_forwarding()
+
+    node = VLMForNavigationNode()
+    node.spin()
+
+
+if __name__ == "__main__":
+    main()

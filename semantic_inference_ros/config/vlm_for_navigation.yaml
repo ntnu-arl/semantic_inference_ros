@@ -1,0 +1,17 @@
+vlm_reasoning:
+  use_server: true
+  vlm_client_config:
+    base_url: YOUR_SERVER_URL_HERE
+    timeout: 3600
+    wait_interval: 0.5
+    submit_endpoint: generate
+    result_endpoint: result
+    verify_ssl: true
+    logging: true
+  use_llm_response_parser: true
+  verbose: true
+  include_bbs: true
+  openai_client_config:
+    model: gpt-4o
+find_paths_method: dijkstra
+mode: one_by_one

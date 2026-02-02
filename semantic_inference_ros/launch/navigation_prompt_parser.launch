@@ -1,0 +1,16 @@
+<launch>
+
+<arg name="verbose" default="true" doc="Show output via stdout"/>
+<arg name="python_env" default="$(find semantic_inference_python)/ros_semantics_env/bin/python" doc="Python environment for open vocab"/>
+<arg name="config_file" default="$(find semantic_inference_ros)/config/navigation_prompt_parser.yaml" doc="Path to the configuration file"/>
+<arg name="system_prompts_path" default="$(find semantic_inference_python)/config/system_prompts/gpt_system_prompt.txt" doc="Path to the system prompts file"/>
+<arg name="examples_path" default="$(find semantic_inference_python)/config/system_prompts/examples.txt" doc="Path to the examples file"/>
+<arg name="labels_path" default="$(find hydra)/config/label_spaces/anymal_label_space.yaml" doc="Path to the labels file"/>
+<node pkg="semantic_inference_ros" type="navigation_prompt_service" name="navigation_prompt_service"
+      ns="semantic_inference" output="$(eval 'screen' if verbose else 'log')" required="false" launch-prefix="$(arg python_env)">
+      <rosparam command="load" file="$(arg config_file)" ns="navigation_prompter"/>
+      <param name="navigation_prompter/system_prompts_path" value="$(arg system_prompts_path)"/>
+      <param name="navigation_prompter/examples_path" value="$(arg examples_path)"/>
+      <param name="navigation_prompter/labels_path" value="$(arg labels_path)"/>
+</node>
+</launch>

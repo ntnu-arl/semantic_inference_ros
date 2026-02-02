@@ -1,0 +1,64 @@
+#!/usr/bin/env python3
+"""
+Node that encodes a prompt and objects,
+then computes the relationship with the visual features.
+"""
+from dataclasses import dataclass
+from typing import Any
+
+import rospy
+import semantic_inference_ros
+from semantic_inference_python import Config, config_field
+from semantic_inference_python.models import default_device
+
+
+@dataclass
+class EncodeVLMLabelsNodeConfig(Config):
+    """Configuration for EncodeVLMLabelsNode."""
+
+    vlm_prompt: Any = config_field("vlm", default="instruct_blip")
+    use_bb_corners: bool = True
+    use_cuda: bool = False
+    geometry: semantic_inference_ros.VLMGeometry = (
+        semantic_inference_ros.VLMGeometry.CENTER
+    )
+    full_img: bool = False
+    crop_img_to_bb: bool = False
+
+
+class EncodeVLMLabelsNode:
+    """Node implementation."""
+
+    def __init__(self):
+        """Construct a feature encoder node."""
+        self.config = semantic_inference_ros.load_from_ros(
+            EncodeVLMLabelsNodeConfig, ns="~"
+        )
+
+        rospy.loginfo(f"'{rospy.get_name()}': Initializing with {self.config.show()}")
+        if not self.config.full_img or self.config.crop_img_to_bb:
+            self.config.vlm_prompt.cropping = False
+        self._model = self.config.vlm_prompt.create().to(
+            default_device(self.config.use_cuda)
+        )
+        rospy.loginfo(f"'{rospy.get_name()}': finished initializing!")
+        self._generator = semantic_inference_ros.VLMTextGenerator(
+            self._model, self.config.geometry
+        )
+
+    def spin(self):
+        """Wait until ROS shuts down."""
+        rospy.spin()
+
+
+def main():
+    """Start the node."""
+    rospy.init_node("encode_vlm_labels_node")
+    semantic_inference_ros.setup_ros_log_forwarding()
+
+    node = EncodeVLMLabelsNode()
+    node.spin()
+
+
+if __name__ == "__main__":
+    main()

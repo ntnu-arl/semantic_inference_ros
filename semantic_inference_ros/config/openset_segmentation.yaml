@@ -1,0 +1,31 @@
+---
+segmentation:
+  type: yoloe
+  confidence: 0.4
+  iou: 0.85
+  output_size: 640
+  verbose: false
+refinement:
+  dilate_masks: true
+clip_model:
+  type: open_clip
+  model_name: ViT-B-32  # ViT-L/14, ViT-B/32
+  model_path: ""
+  tokenizer_name: ViT-B-32
+  pretrained: laion2b_s34b_b79k
+# controls pixel-aligned features
+use_dense: false
+dense_ratio: 0.9
+max_batch: 10
+max_batch_vlm: 6
+text_embeddings: True
+box_embeddings: False
+mask_embeddings: True
+text_embeddings_weight: 0.9
+box_embeddings_weight: 0.0
+mask_embeddings_weight: 0.1
+cuda: True
+verbose: False
+dense_representation_radius_m: 7.0
+min_depth: 0.05
+pub_detections: True

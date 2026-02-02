@@ -1,0 +1,151 @@
+name,red,green,blue,alpha,id,color
+wall,0,102,51,255,0,darkgreen
+building,0,255,0,255,1,lime
+sky,4,74,246,255,2,royalblue
+floor,191,191,181,255,3,silver
+tree,72,90,13,255,4,darkolivegreen
+ceiling,204,0,102,255,5,mediumvioletred
+road,196,26,252,255,6,magenta
+bed,254,217,251,255,7,lavenderblush
+windowpane,127,255,255,255,8,aquamarine
+grass,133,87,54,255,9,sienna
+cabinet,130,26,50,255,10,brown
+sidewalk,10,5,65,255,11,midnightblue
+person,3,75,135,255,12,teal
+earth,18,124,89,255,13,seagreen
+door,21,182,126,255,14,mediumseagreen
+table,90,171,130,255,15,cadetblue
+mountain,189,217,119,255,16,darkkhaki
+plant,188,63,11,255,17,firebrick
+curtain,86,82,249,255,18,royalblue 1
+chair,196,221,253,255,19,powderblue
+car,187,78,62,255,20,sienna 1
+water,188,49,167,255,21,mediumvioletred 1
+painting,182,161,248,255,22,lightsteelblue
+sofa,112,201,196,255,23,mediumaquamarine
+shelf,11,41,99,255,24,midnightblue 1
+house,211,102,1,255,25,chocolate
+sea,4,227,101,255,26,springgreen
+mirror,147,201,250,255,27,lightskyblue
+rug,255,0,0,255,28,red
+field,224,33,3,255,29,red 1
+armchair,254,74,17,255,30,orangered
+seat,255,127,0,255,31,darkorange
+fence,176,188,66,255,32,yellowgreen
+desk,247,29,54,255,33,crimson
+rock,74,117,80,255,34,darkolivegreen 1
+wardrobe,71,56,199,255,35,slateblue
+lamp,250,107,216,255,36,orchid
+bathtub,4,204,229,255,37,darkturquoise
+railing,25,208,53,255,38,limegreen
+cushion,52,249,65,255,39,limegreen 1
+base,70,220,121,255,40,mediumseagreen 1
+box,68,86,156,255,41,darkslateblue
+column,7,150,36,255,42,forestgreen
+signboard,255,127,127,255,43,salmon
+chest of drawers,64,46,6,255,44,darkolivegreen 2
+counter,139,167,123,255,45,darkseagreen
+sand,18,165,78,255,46,seagreen 1
+sink,157,166,28,255,47,yellowgreen 1
+skyscraper,9,163,248,255,48,dodgerblue
+fireplace,191,67,218,255,49,mediumorchid
+refrigerator,135,243,61,255,50,greenyellow
+grandstand,81,119,190,255,51,steelblue
+path,0,126,204,255,52,dodgerblue 1
+stairs,228,73,252,255,53,orchid 1
+runway,227,108,163,255,54,palevioletred
+case,127,255,127,255,55,lightgreen
+pool table,50,211,203,255,56,turquoise
+pillow,3,190,177,255,57,lightseagreen
+screen door,127,255,0,255,58,chartreuse
+stairway,11,59,10,255,59,darkgreen 1
+river,108,38,143,255,60,darkslateblue 1
+bridge,243,33,254,255,61,magenta 1
+bookcase,182,106,251,255,62,mediumorchid 1
+blind,120,251,191,255,63,aquamarine 1
+coffee table,145,115,208,255,64,mediumpurple
+toilet,48,129,250,255,65,dodgerblue 2
+flower,43,78,65,255,66,darkslategray
+book,73,0,197,255,67,indigo
+hill,0,249,143,255,68,mediumspringgreen
+bench,80,160,69,255,69,seagreen 2
+countertop,200,252,62,255,70,greenyellow 1
+stove,127,39,198,255,71,darkorchid
+palm,139,79,186,255,72,darkorchid 1
+kitchen island,155,225,169,255,73,lightgreen 1
+computer,239,148,63,255,74,coral
+swivel chair,30,183,5,255,75,forestgreen 1
+boat,137,90,3,255,76,saddlebrown
+bar,49,35,155,255,77,darkslateblue 2
+arcade machine,242,186,113,255,78,sandybrown
+hovel,127,0,0,255,79,maroon
+bus,191,148,1,255,80,darkgoldenrod
+towel,134,147,65,255,81,olivedrab
+light,175,254,104,255,82,lightgreen 2
+truck,84,183,23,255,83,olivedrab 1
+tower,12,87,183,255,84,darkcyan
+chandelier,1,20,178,255,85,mediumblue
+awning,185,224,0,255,86,greenyellow 2
+streetlight,255,255,127,255,87,khaki
+booth,44,252,176,255,88,turquoise 1
+television receiver,62,186,252,255,89,dodgerblue 3
+airplane,3,253,46,255,90,lime 1
+dirt track,41,208,156,255,91,lightseagreen 1
+apparel,138,94,126,255,92,gray
+pole,32,31,231,255,93,blue
+land,192,120,193,255,94,orchid 2
+bannister,231,66,87,255,95,indianred
+escalator,105,0,153,255,96,purple
+ottoman,251,216,190,255,97,peachpuff
+bottle,228,45,198,255,98,mediumorchid 2
+buffet,0,0,255,255,99,blue 1
+poster,67,234,247,255,100,turquoise 2
+stage,156,4,152,255,101,darkmagenta
+van,253,219,57,255,102,gold
+ship,183,148,126,255,103,rosybrown
+fountain,246,154,179,255,104,lightpink
+conveyer belt,127,127,255,255,105,mediumslateblue
+canopy,0,255,255,255,106,cyan
+washer,225,189,224,255,107,thistle
+plaything,47,253,125,255,108,springgreen 1
+swimming pool,47,0,127,255,109,indigo 1
+stool,92,207,58,255,110,limegreen 2
+barrel,173,253,235,255,111,paleturquoise
+basket,251,78,170,255,112,hotpink
+waterfall,164,41,91,255,113,brown 1
+tent,0,127,0,255,114,green
+bag,65,43,54,255,115,darkslategray 1
+minibike,196,100,129,255,116,palevioletred 1
+cradle,143,157,184,255,117,darkgray
+oven,234,190,2,255,118,orange
+ball,0,234,191,255,119,darkturquoise 1
+food,191,254,179,255,120,palegreen
+step,149,1,215,255,121,darkviolet
+tank,67,231,11,255,122,limegreen 3
+trade name,131,195,0,255,123,yellowgreen 2
+microwave,188,121,62,255,124,peru
+pot,70,143,13,255,125,forestgreen 2
+animal,106,168,230,255,126,cornflowerblue
+bicycle,231,106,88,255,127,indianred 1
+lake,255,255,0,255,128,yellow
+dishwasher,121,54,15,255,129,saddlebrown 1
+screen,127,255,0,255,130,chartreuse 1
+blanket,248,157,252,255,131,violet
+sculpture,63,7,14,255,132,black
+hood,146,63,249,255,133,blueviolet
+sconce,185,8,32,255,134,firebrick 1
+vase,247,0,223,255,135,magenta 2
+traffic light,234,252,199,255,136,lightgoldenrodyellow
+tray,91,29,248,255,137,blueviolet 1
+trashcan,122,0,89,255,138,purple 1
+fan,41,99,220,255,139,royalblue 2
+pier,28,132,140,255,140,darkcyan 1
+crt screen,127,209,111,255,141,darkseagreen 1
+plate,110,54,79,255,142,dimgray
+monitor,63,68,107,255,143,darkslateblue 3
+bulletin,214,0,171,255,144,mediumvioletred 2
+shower,71,9,82,255,145,indigo 2
+radiator,224,187,57,255,146,goldenrod
+glass,253,20,130,255,147,deeppink
+clock,127,127,0,255,148,olive
+flag,113,132,132,255,149,slategray

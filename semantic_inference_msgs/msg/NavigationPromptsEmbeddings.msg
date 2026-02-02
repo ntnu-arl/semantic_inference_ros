@@ -1,0 +1,7 @@
+string room
+string prompt
+string[] objects
+bool object_search
+semantic_inference_msgs/FeatureVectorStamped text_room_embedding
+semantic_inference_msgs/FeatureVectorStamped[] text_object_embedding
+semantic_inference_msgs/ObjectsPromptPair[] objects_prompt_pairs

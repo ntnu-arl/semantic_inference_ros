@@ -1,0 +1,4 @@
+string level
+string prompt
+---
+semantic_inference_msgs/LevelFeatureVectorStamped feature
