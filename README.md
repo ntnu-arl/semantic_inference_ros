@@ -120,9 +120,10 @@ This section enables reasoning on the [relationship-aware hierarchical scene gra
 
 - LLMs predict relevant objects and interactions for given tasks  
 - VLM responses are parsed by LLMs  
-- **OpenAI API key** required in:  
-  - [navigation_prompt_parser.yaml](./semantic_inference_ros/config/navigation_prompt_parser.yaml)  
-  - [vlm_for_navigation.yaml](./semantic_inference_ros/config/vlm_for_navigation.yaml)  
+- **OpenAI API key** required, run:  
+```bash
+export OPENAI_API_KEY=<Your OpenAI API Key>
+``` 
 
 VLM reasoning is performed on the cloud. Use [DeepSeek-VL2 server code](https://github.com/ntnu-arl/DeepSeek-VL2/tree/server) to run FastAPI server.
 
@@ -149,7 +150,10 @@ bash setup.sh
 bash run_server.sh
 ```
 
-Finally, set the **server URL** and **API key** in [vlm_for_navigation.yaml](./semantic_inference_ros/config/vlm_for_navigation.yaml).
+Finally, set the **server URL** in [vlm_for_navigation.yaml](./semantic_inference_ros/config/vlm_for_navigation.yaml) and export your FASTAPI_KEY:
+```bash
+export FASTAPI_API_KEY=<Your server FastAPI Key>
+``` 
 
 ---
 
