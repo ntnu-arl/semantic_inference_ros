@@ -156,11 +156,11 @@ Finally, set the **server URL** and **API key** in [vlm_for_navigation.yaml](./s
 ## Citation
 
 ```bibtex
-@article{puigjaner2025scenegraph,
-  title={Relationship-Aware Hierarchical 3D Scene Graph for Task Reasoning},
-  author={Gassol Puigjaner, Albert and Zacharia, Angelos and Alexis, Kostas},
-  journal={ArXiv},
-  year={2025},
+@inproceedings{puigjaner2026reasoninggraph,
+    title={Relationship-Aware Hierarchical 3D Scene Graph},
+    author={Gassol Puigjaner, Albert and Zacharia, Angelos and Alexis, Kostas},
+    booktitle={2026 IEEE International Conference on Robotics and Automation (ICRA)}, 
+    year={2026}
 }
 ```
 
