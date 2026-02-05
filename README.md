@@ -170,6 +170,12 @@ export FASTAPI_API_KEY=<Your server FastAPI Key>
 
 ---
 
+## Zenodo DOI
+
+https://doi.org/10.5281/zenodo.18496220
+
+---
+
 ## License
 
 Released under **BSD-3-Clause**.
