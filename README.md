@@ -100,8 +100,9 @@ This method takes a segmented image along with its **original RGB-D frame** and 
 
 Supported VLMs: [InstructBLIP](https://huggingface.co/collections/Salesforce/instructblip-models) and [DeepSeek-VL2](https://huggingface.co/deepseek-ai/deepseek-vl2).
 
-To use **DeepSeek-VL2**, first extract the visual encoder as a standalone model (~100GB RAM required):
+To use **DeepSeek-VL2**, first extract the visual encoder as a standalone model. For the large model (used in our experiments), we provide it [here](https://huggingface.co/ntnu-arl/deepseek-vl2-vision-enc). 
 
+Alternmatively, the models can be extracted with the following command (~100GB RAM required for the large moded):
 ```bash
 python semantic_inference_python/scripts/extract_deepseek_visual.py --model_name <model to use> --output_path <path to store model>
 ```
