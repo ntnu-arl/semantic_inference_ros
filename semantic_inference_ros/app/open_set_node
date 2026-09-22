@@ -1,0 +1,114 @@
+#!/usr/bin/env python3
+"""Node that runs openset segmentation."""
+
+import pathlib
+from dataclasses import dataclass, field
+from typing import Any
+
+import rclpy
+import spark_config as sc
+import torch
+from rclpy.node import Node
+from sensor_msgs.msg import Image
+
+import semantic_inference_python.models as models
+import semantic_inference_ros
+from semantic_inference_msgs.msg import FeatureImage, FeatureVectorStamped
+from semantic_inference_ros import Conversions, ImageWorkerConfig
+
+
+@dataclass
+class OpenSetNodeConfig(sc.Config):
+    """Configuration for ClipPublisherNode."""
+
+    worker: ImageWorkerConfig = field(default_factory=ImageWorkerConfig)
+    model: models.OpensetSegmenterConfig = field(
+        default_factory=models.OpensetSegmenterConfig
+    )
+    visualizer: Any = sc.config_field(
+        "feature_visualizer", default="component", required=False
+    )
+
+
+class OpenSetNode(Node):
+    """Node to run openset segmentation."""
+
+    def __init__(self):
+        """Start subscriber and publisher."""
+        super().__init__("open_set_node")
+        config_path = (
+            self.declare_parameter("config_path", "").get_parameter_value().string_value
+        )
+        config_path = pathlib.Path(config_path).expanduser().absolute()
+        if not config_path.exists() and config_path != "":
+            self.get_logger().warn(f"config path '{config_path}' does not exist!")
+            self.config = OpenSetNodeConfig()
+        else:
+            self.config = sc.Config.load(OpenSetNodeConfig, config_path)
+
+        self.get_logger().info(f"Initializing with {self.config.show()}")
+        device = models.default_device(cuda_device=0)
+        self._model = models.OpensetSegmenter(self.config.model).to(device)
+        self._model.eval()
+        self.get_logger().info("Finished initializing!")
+
+        self._pub = self.create_publisher(Image, "semantic/image_raw", 1)
+        self._pub_features = self.create_publisher(FeatureImage, "semantic/features", 1)
+        self._clip_pub = self.create_publisher(
+            FeatureVectorStamped, "semantic/feature", 1
+        )
+        self._worker = semantic_inference_ros.ImageWorker(
+            self, self.config.worker, "color/image_raw", self._spin_once
+        )
+        self._embedder = semantic_inference_ros.PromptEncoder(self, self._model.encoder)
+        self._visualizer = self.config.visualizer.create()
+        if self._visualizer is not None:
+            self._color_pub = self.create_publisher(
+                Image, "semantic_color/image_raw", 1
+            )
+
+    def _spin_once(
+        self,
+        header,
+        img,
+    ):
+        with torch.no_grad():
+            ret = self._model.segment(img, is_rgb_order=True).cpu()
+
+        msg = Conversions.to_feature_image(header, ret)
+        self._pub_features.publish(msg)
+        self._pub.publish(msg.image)
+        self._clip_pub.publish(
+            Conversions.to_stamped_feature(header, ret.image_embedding)
+        )
+
+        if self._visualizer is not None:
+            color_img = self._visualizer.call(ret)
+            self._color_pub.publish(
+                Conversions.to_image_msg(header, color_img, encoding="rgb8")
+            )
+
+    def stop(self):
+        """Stop the underlying image worker."""
+        self._worker.stop()
+
+
+def main():
+    """Start a node."""
+    rclpy.init()
+
+    node = None
+    try:
+        node = OpenSetNode()
+        semantic_inference_ros.setup_ros_log_forwarding(node)
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        rclpy.try_shutdown()
+        if node is not None:
+            node.stop()
+
+
+if __name__ == "__main__":
+    main()

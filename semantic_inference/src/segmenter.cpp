@@ -1,6 +1,3 @@
-// Portions of the following code and their modifications are originally from
-// https://github.com/MIT-SPARK/semantic_inference and are licensed under the following
-// license:
 /* -----------------------------------------------------------------------------
  * BSD 3-Clause License
  *
@@ -31,12 +28,6 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * * -------------------------------------------------------------------------- */
-
-// Copyright (c) 2025, Autonomous Robots Lab, Norwegian University of Science and
-// Technology All rights reserved.
-
-// This source code is licensed under the BSD-style license found in the
-// LICENSE file in the root directory of this source tree
 
 #include "semantic_inference/segmenter.h"
 
@@ -84,22 +75,17 @@ struct Segmenter::Impl {
 Segmenter::Segmenter(const Config& config)
     : config(config::checkValid(config)),
       impl_(new Impl(config.model)),
-      panoptic_extractor_(new PanopticExtractor()),
       mask_(config.depth_mask) {}
 
 Segmenter::~Segmenter() = default;
 
-SegmentationResult Segmenter::infer(const cv::Mat& color, const cv::Mat& depth) {
+SegmentationResult Segmenter::infer(const cv::Mat& color, const cv::Mat& depth) const {
   auto result = impl_->infer(color, depth);
   if (!result || depth.empty() || !config.mask_predictions_with_depth) {
-    if (result) {
-      panoptic_extractor_->extract(result.labels, result.panoptic_ids);
-    }
     return result;
   }
-  const auto masked_labels = mask_.maskLabels(result.labels, depth);
-  panoptic_extractor_->extract(masked_labels, result.panoptic_ids);
-  return {true, masked_labels, result.panoptic_ids};
+
+  return {true, mask_.maskLabels(result.labels, depth)};
 }
 
 void declare_config(Segmenter::Config& config) {

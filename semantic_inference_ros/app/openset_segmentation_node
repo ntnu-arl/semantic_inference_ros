@@ -1,168 +1,264 @@
 #!/usr/bin/env python3
-"""Node that runs openset segmentation."""
-from dataclasses import dataclass, field
+# BSD 3-Clause License
 
-import rospy
-import time
+# Copyright (c) 2026, NTNU Autonomous Robots Lab
+# All rights reserved.
+
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
+
+# 1. Redistributions of source code must retain the above copyright notice, this
+#    list of conditions and the following disclaimer.
+
+# 2. Redistributions in binary form must reproduce the above copyright notice,
+#    this list of conditions and the following disclaimer in the documentation
+#    and/or other materials provided with the distribution.
+
+# 3. Neither the name of the copyright holder nor the names of its
+#    contributors may be used to endorse or promote products derived from
+#    this software without specific prior written permission.
+
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+# DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+# FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+# DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+# SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+# CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+# OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+#
+"""Node that runs openset segmentation."""
+
+import pathlib
+from dataclasses import dataclass, field
+from typing import Optional
+
+import cv2
+import numpy as np
+import rclpy
+import spark_config as sc
+import torch
+import yaml
+from hvlm_planner_msgs.msg import EQAPlannerOutput
+from hydra_msgs.msg import NewLabels
+from rclpy.node import Node
+from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
+from sensor_msgs.msg import CameraInfo, Image
+from std_msgs.msg import Bool, Header
+
 import semantic_inference_python.models as models
 import semantic_inference_ros
-import torch
-import numpy as np
-import cv2
-
-from semantic_inference_python import Config
-from semantic_inference_msgs.msg import FeatureImage, FeatureVectorStamped
-from sensor_msgs.msg import Image, CompressedImage, CameraInfo
-from semantic_inference_ros import Conversions, SyncImagesWorkerConfig, RecolorConfig
+from semantic_inference_msgs.msg import FeatureImage, FullFeatures
+from semantic_inference_ros import Conversions, ImageWorkerConfig, RecolorConfig
 
 
 @dataclass
-class OpensetSegmentationNodeConfig(Config):
+class OpensetSegmentationConfig(sc.Config):
     """Configuration for ClipPublisherNode."""
 
-    worker: SyncImagesWorkerConfig = field(default_factory=SyncImagesWorkerConfig)
-    model: models.OpensetSegmenterConfig = field(
-        default_factory=models.OpensetSegmenterConfig
+    worker: ImageWorkerConfig = field(default_factory=ImageWorkerConfig)
+    model: models.OpensetSegmenterLabeledConfig = field(
+        default_factory=models.OpensetSegmenterLabeledConfig
     )
     recolor: RecolorConfig = field(default_factory=RecolorConfig)
-    playback_mode: bool = False
-    print_inference_time: bool = False
+    text_encoder_service: semantic_inference_ros.LayerPromptEncoderConfig = field(
+        default_factory=semantic_inference_ros.LayerPromptEncoderConfig
+    )
 
 
-class OpensetSegmentationNode:
+@dataclass
+class RectMaps:
+    map1: Optional[np.ndarray] = None
+    map2: Optional[np.ndarray] = None
+
+    def initialized(self) -> bool:
+        return self.map1 is not None and self.map2 is not None
+
+
+class OpensetSegmentationNode(Node):
     """Node to run openset segmentation."""
 
     def __init__(self):
         """Start subscriber and publisher."""
-        self.config = semantic_inference_ros.load_from_ros(
-            OpensetSegmentationNodeConfig, ns="~"
+        super().__init__("openset_segmentation_node")
+        ros_config_params = (
+            self.declare_parameter("config", "").get_parameter_value().string_value
         )
+        config_path = (
+            self.declare_parameter("config_path", "").get_parameter_value().string_value
+        )
+        config_path = pathlib.Path(config_path).expanduser().absolute()
+        if not config_path.exists() and config_path != "":
+            self.get_logger().warn(f"config path '{config_path}' does not exist!")
+            self.config = OpensetSegmentationConfig()
+        else:
+            self.config = sc.Config.load(OpensetSegmentationConfig, config_path)
+        self.config.update(yaml.safe_load(ros_config_params))
 
-        rospy.loginfo(f"'{rospy.get_name()}': Initializing with {self.config.show()}")
-        device = models.default_device(self.config.model.cuda)
+        self.get_logger().info(f"Initializing with {self.config.show()}")
+        device = models.default_device(cuda_device=0)
+        self._maps = RectMaps()
         self._recolor = semantic_inference_ros.Recolor(self.config.recolor)
-        id_to_name = {v: k for k, v in self._recolor.name_to_id.items()}
-        self._model = models.OpensetSegmenter(self.config.model, id_to_name)
-        self._model.to_device(device)
-        self.map1 = None
-        self.map2 = None
-        # self._model.eval()
-        rospy.loginfo(f"'{rospy.get_name()}': finished initializing!")
+        self._model = models.OpensetSegmenterLabeled(
+            self.config.model, self._recolor.get_colorpalette()
+        ).to(device)
+        self._model.eval()
 
-        self._pub = rospy.Publisher("semantic/image_raw", FeatureImage, queue_size=1)
-        self._feature_image_color_pub_ = rospy.Publisher(
-            "semantic_color/feature_image", FeatureImage, queue_size=1
+        self._pub = self.create_publisher(Image, "semantic/image_raw", 1)
+        self._full_features_pub = self.create_publisher(
+            FullFeatures, "semantic/full_features", 1
         )
-        self._colored_image_pub_ = rospy.Publisher(
-            "semantic_color/image_raw", Image, queue_size=1
-        )
-        self._panoptic_image_pub = rospy.Publisher(
-            "panoptic/image_raw", Image, queue_size=1
-        )
-        self._clip_pub = rospy.Publisher(
-            "image_feature", FeatureVectorStamped, queue_size=1
-        )
-        self._debug_pub = rospy.Publisher("detections", Image, queue_size=1)
-
-        self._camera_info_sub = rospy.Subscriber(
-            "color/camera_info", CameraInfo, self.callback_camera_info
-        )
+        self._pub_features = self.create_publisher(FeatureImage, "semantic/features", 1)
+        self._detections_pub = self.create_publisher(Image, "detections", 1)
         self._worker = semantic_inference_ros.SyncImagesWorker(
+            self,
             self.config.worker,
             ["color/image_raw", "depth/image_raw"],
-            [Image, Image]
-            if not self.config.playback_mode
-            else [CompressedImage, CompressedImage],
             self._spin_once,
         )
-        # self._embedder = semantic_inference_ros.PromptEncoder(self._model.encoder)
+        self._camera_info_sub = self.create_subscription(
+            CameraInfo, "camera_info", self._callback_camera_info, 1
+        )
 
-    def callback_camera_info(self, msg: CameraInfo):
+        self._new_labels_sub = self.create_subscription(
+            NewLabels, "new_labels", self._callback_new_labels, 1
+        )
+
+        self._eqa_planner_output_sub = self.create_subscription(
+            EQAPlannerOutput, "eqa_planner_output", self._callback_eqa_planner_output, 1
+        )
+
+        self._embedder = semantic_inference_ros.LayerPromptEncoder(
+            self,
+            self.config.text_encoder_service,
+        )
+        self._embedder.to_device(device)
+        self._color_pub = self.create_publisher(Image, "semantic_color/image_raw", 1)
+        self.get_logger().info("Finished initializing!")
+        qos = QoSProfile(
+            depth=1,
+            durability=DurabilityPolicy.TRANSIENT_LOCAL,
+            reliability=ReliabilityPolicy.RELIABLE,
+        )
+
+        self._ready_pub = self.create_publisher(Bool, "ready", qos)
+
+    def _callback_new_labels(self, msg: NewLabels):
+        """Callback for new labels."""
+        if not self._recolor.add_labels(msg.new_labels):
+            return
+        if not self._model.segmenter.config.add_labels(msg.new_labels):
+            return
+        self._model.segmenter.set_classes()
+        self._model.visualizer.classes = self._model.segmenter.config.get_labels()
+
+        self.get_logger().info(
+            f"Added {len(msg.new_labels)} new labels. Total labels: "
+            f"{len(self._model.segmenter.config.get_labels())}"
+        )
+
+    def _callback_eqa_planner_output(self, msg: EQAPlannerOutput):
+        """Callback for EQA planner output."""
+        if not self._recolor.add_labels(msg.new_labels):
+            return
+        if not self._model.segmenter.config.add_labels(msg.new_labels):
+            return
+        self._model.segmenter.set_classes()
+        self._model.visualizer.classes = self._model.segmenter.config.get_labels()
+
+        self.get_logger().info(
+            f"Added {len(msg.new_labels)} new labels. Total labels: "
+            f"{len(self._model.segmenter.config.get_labels())}"
+        )
+
+    def _callback_camera_info(self, msg: CameraInfo):
         """Callback for camera info."""
-        K = np.array(msg.K).reshape((3, 3))
-        D = np.array(msg.D)
+        K = np.array(msg.k).reshape((3, 3))
+        D = np.array(msg.d)
         image_size = (msg.width, msg.height)
 
-        self.map1, self.map2 = cv2.initUndistortRectifyMap(
+        self._maps.map1, self._maps.map2 = cv2.initUndistortRectifyMap(
             K, D, None, K, image_size, cv2.CV_16SC2
         )
 
-        rospy.loginfo("[Open vocabulary node] Undistortion maps initialized")
-
+        self._ready_pub.publish(Bool(data=True))
         # Unsubscribe to save resources
-        self._camera_info_sub.unregister()
+        self.destroy_subscription(self._camera_info_sub)
 
-    def _spin_once(self, header, img: np.ndarray, depth: np.ndarray):
-        start_time = time.time()
-        if self.map1 is None or self.map2 is None:
-            rospy.logwarn(
-                "[Open vocabulary node] Undistortion maps not initialized yet. Skipping processing."
+    def _spin_once(self, header: Header, img: np.ndarray, depth: np.ndarray) -> None:
+        """Process a single image pair.
+        :param header: Header of the images.
+        :param img: Color image as a numpy array.
+        :param depth: Depth image as a numpy array.
+        """
+        if not self._maps.initialized():
+            self.get_logger().warn(
+                "Undistortion maps not initialized yet. Skipping processing."
             )
             return
-        img = cv2.remap(img, self.map1, self.map2, interpolation=cv2.INTER_LINEAR)
-        depth = cv2.remap(depth, self.map1, self.map2, interpolation=cv2.INTER_LINEAR)
+        img = cv2.remap(
+            img, self._maps.map1, self._maps.map2, interpolation=cv2.INTER_LINEAR
+        )
+        depth = cv2.remap(
+            depth, self._maps.map1, self._maps.map2, interpolation=cv2.INTER_LINEAR
+        )
 
         if depth.dtype == np.uint16:
             depth = depth.astype(np.float32) / 1000.0  # Convert to meters
         elif depth.dtype != np.float32:
-            rospy.logerr(
-                f"[Open vocabulary node] Depth image has unsupported dtype {depth.dtype}. Expected uint16 or float32."
+            self.get_logger().error(
+                f"Depth image has unsupported dtype {depth.dtype}."
+                " Expected uint16 or float32."
             )
             return
         with torch.no_grad():
-            ret, debug_img = self._model.segment(
-                img, depth, colors=self._recolor.get_colorpalette(), is_rgb_order=True
-            )
-        if self.config.print_inference_time:
-            rospy.loginfo(
-                f"[Open vocabulary node] Inference time for image {header.seq}: {(time.time() - start_time) * 1000:.3f} ms"
-            )
+            ret, vis_img = self._model.segment(img, depth, is_rgb_order=True)
+        ret = ret.cpu()
 
-        msg = Conversions.to_feature_image(header, ret)
-        self._pub.publish(msg)
-        self._clip_pub.publish(
-            Conversions.to_stamped_feature(header, ret.image_embedding)
+        msg = Conversions.to_feature_image_from_masks_labels(
+            header, ret, self._recolor.unknown
         )
-        if debug_img is not None:
-            self._debug_pub.publish(
-                Conversions.to_sensor_image(debug_img, header=header, encoding="rgb8")
+        self._pub_features.publish(msg)
+        self._pub.publish(msg.image)
+
+        full_feature_msg = Conversions.to_full_features(
+            header, ret, self._recolor.unknown
+        )
+
+        self._full_features_pub.publish(full_feature_msg)
+
+        if vis_img is not None:
+            self._detections_pub.publish(
+                Conversions.to_image_msg(header, vis_img, encoding="rgb8")
             )
         if ret.labels is not None:
-            msg = Conversions.to_colored_feature_image(
-                header, ret, self._recolor.recolor_image(ret.masks, ret.labels)
+            color_img = self._recolor.recolor_image(ret.masks, ret.labels)
+            self._color_pub.publish(
+                Conversions.to_image_msg(header, color_img.numpy(), encoding="rgb8")
             )
-            self._panoptic_image_pub.publish(
-                Conversions.to_sensor_image(
-                    ret.panoptic_image.numpy().astype(np.int16), header=header
-                )
-            )
-            self._feature_image_color_pub_.publish(msg)
-            self._colored_image_pub_.publish(msg.image)
-        else:
-            self._panoptic_image_pub.publish(
-                Conversions.to_sensor_image(
-                    np.zeros((img.shape[0], img.shape[1]), dtype=np.int16),
-                    header=header,
-                )
-            )
-            msg = Conversions.to_colored_feature_image(
-                header, ret, np.zeros((img.shape[0], img.shape[1], 3), dtype=np.uint8)
-            )
-            self._feature_image_color_pub_.publish(msg)
-            self._colored_image_pub_.publish(msg.image)
 
-    def spin(self):
-        """Wait until ros shuts down."""
-        self._worker.spin()
+    def stop(self):
+        """Stop the underlying image worker."""
+        self._worker.stop()
 
 
 def main():
     """Start a node."""
-    rospy.init_node("openset_segmentation_node")
-    semantic_inference_ros.setup_ros_log_forwarding()
+    rclpy.init()
 
-    node = OpensetSegmentationNode()
-    node.spin()
+    node = None
+    try:
+        node = OpensetSegmentationNode()
+        semantic_inference_ros.setup_ros_log_forwarding(node)
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        rclpy.try_shutdown()
+        if node is not None:
+            node.stop()
 
 
 if __name__ == "__main__":

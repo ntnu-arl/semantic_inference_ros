@@ -36,6 +36,7 @@
 #include <config_utilities/validation.h>
 
 #include <fstream>
+
 #include <opencv2/imgproc.hpp>
 
 #include "semantic_inference/logging.h"
@@ -44,7 +45,11 @@ namespace semantic_inference {
 
 namespace fs = std::filesystem;
 
-std::string vecToString(const std::vector<std::string>& vec) {
+using Colormap = std::map<Label, std::array<uint8_t, 3>>;
+
+namespace {
+
+inline std::string vecToString(const std::vector<std::string>& vec) {
   std::stringstream ss;
   ss << "[";
 
@@ -60,16 +65,36 @@ std::string vecToString(const std::vector<std::string>& vec) {
   return ss.str();
 }
 
-std::map<int16_t, std::array<uint8_t, 3>> loadColormap(const fs::path& filepath,
-                                                       bool skip_first = true,
-                                                       char delimiter = ',') {
+inline std::array<uint8_t, 3> getColorFromHLS(float ratio,
+                                              float luminance,
+                                              float saturation) {
+  cv::Mat hls(1, 1, CV_32FC3);
+  hls.at<float>(0) = 360.0 * ratio;
+  hls.at<float>(1) = luminance;
+  hls.at<float>(2) = saturation;
+
+  cv::Mat bgr;
+  cv::cvtColor(hls, bgr, cv::COLOR_HLS2BGR);
+  return {static_cast<uint8_t>(255 * bgr.at<float>(2)),
+          static_cast<uint8_t>(255 * bgr.at<float>(1)),
+          static_cast<uint8_t>(255 * bgr.at<float>(0))};
+}
+
+Colormap loadColormap(const fs::path& filepath,
+                      bool skip_first = true,
+                      char delimiter = ',',
+                      std::optional<size_t> total_labels = std::nullopt) {
+  if (!std::filesystem::exists(filepath)) {
+    return {};
+  }
+
   std::ifstream file(filepath.string());
   if (!file.good()) {
     SLOG(ERROR) << "Couldn't open file: " << filepath;
     return {};
   }
 
-  std::map<int16_t, std::array<uint8_t, 3>> cmap;
+  std::map<Label, std::array<uint8_t, 3>> cmap;
   size_t row_number = 0;
   std::string curr_line;
   while (std::getline(file, curr_line)) {
@@ -96,59 +121,72 @@ std::map<int16_t, std::array<uint8_t, 3>> loadColormap(const fs::path& filepath,
     const uint8_t r = std::atoi(columns[1].c_str());
     const uint8_t g = std::atoi(columns[2].c_str());
     const uint8_t b = std::atoi(columns[3].c_str());
-    const int16_t id = std::atoi(columns[5].c_str());
+    const Label id = std::atoi(columns[5].c_str());
     cmap[id] = {r, g, b};
     row_number++;
+  }
+
+  if (total_labels) {
+    const auto N = total_labels.value();
+    for (size_t i = 0; i < N; ++i) {
+      auto iter = cmap.find(i);
+      if (iter == cmap.end()) {
+        SLOG(WARNING) << "Missing color for label " << i;
+        cmap[i] = getColorFromHLS(static_cast<float>(i) / N, 0.7, 0.7);
+      }
+    }
   }
 
   return cmap;
 }
 
-std::array<uint8_t, 3> getColorFromHLS(float ratio, float luminance, float saturation) {
-  cv::Mat hls(1, 1, CV_32FC3);
-  hls.at<float>(0) = 360.0 * ratio;
-  hls.at<float>(1) = luminance;
-  hls.at<float>(2) = saturation;
+std::array<uint8_t, 3> colorFromVec(const std::vector<uint8_t>& vec) {
+  if (vec.size() != 3u) {
+    throw std::runtime_error("Invalid color input!");
+  }
 
-  cv::Mat bgr;
-  cv::cvtColor(hls, bgr, cv::COLOR_HLS2BGR);
-  return {static_cast<uint8_t>(255 * bgr.at<float>(2)),
-          static_cast<uint8_t>(255 * bgr.at<float>(1)),
-          static_cast<uint8_t>(255 * bgr.at<float>(0))};
+  return {vec[0], vec[1], vec[2]};
 }
+
+std::map<Label, Label> loadRemapping(const std::vector<GroupInfo>& groups,
+                                     Label offset) {
+  std::map<Label, Label> remapping;
+  for (size_t i = 0; i < groups.size(); ++i) {
+    const auto& group = groups[i];
+    for (const auto& label : group.labels) {
+      remapping[label + offset] = i;
+    }
+  }
+
+  return remapping;
+}
+
+}  // namespace
 
 ImageRecolor::ImageRecolor(const Config& config,
-                           const std::map<int16_t, std::array<uint8_t, 3>>& colormap)
-    : config(config::checkValid(config)), color_map_(colormap) {
-  if (std::filesystem::exists(config.colormap_path)) {
-    color_map_ = loadColormap(config.colormap_path);
-  }
+                           const std::map<Label, std::array<uint8_t, 3>>& colormap)
+    : config(config::checkValid(config)),
+      default_color(colorFromVec(config.default_color)),
+      label_remapping(loadRemapping(config.groups, config.offset)),
+      color_map(!colormap.empty() ? colormap
+                                  : loadColormap(config.colormap_path,
+                                                 config.skip_header,
+                                                 config.delimiter,
+                                                 config.groups.size() + 1)) {}
 
-  const auto num_classes = config.groups.size() + 1;
-  for (size_t i = 0; i < config.groups.size(); ++i) {
-    const auto& group = config.groups[i];
-    auto iter = color_map_.find(i);
-    if (iter == color_map_.end()) {
-      SLOG(WARNING) << "Missing color for group '" << group.name << "'";
-      color_map_[i] = getColorFromHLS(static_cast<float>(i) / num_classes, 0.7, 0.7);
-    }
-
-    for (const auto& label : group.labels) {
-      label_remapping_[label + config.offset] = i;
-    }
-  }
-
-  for (const auto& entry : color_map_) {
-    color_to_label_[entry.second] = entry.first;
-  }
-}
-
-ImageRecolor ImageRecolor::fromHLS(int16_t num_classes,
+ImageRecolor ImageRecolor::fromHLS(size_t num_classes,
                                    float luminance,
                                    float saturation) {
+  Label total_classes;
+  if (num_classes > std::numeric_limits<Label>::max()) {
+    total_classes = std::numeric_limits<Label>::max();
+  } else {
+    total_classes = static_cast<Label>(num_classes);
+  }
+
   Config config;
-  std::map<int16_t, std::array<uint8_t, 3>> colormap;
-  for (int16_t i = 0; i < num_classes; ++i) {
+  std::map<Label, std::array<uint8_t, 3>> colormap;
+  for (Label i = 0; i < total_classes; ++i) {
     GroupInfo info;
     info.name = "group_" + std::to_string(i);
     info.labels = {i};
@@ -181,8 +219,8 @@ void ImageRecolor::relabelImage(const cv::Mat& classes, cv::Mat& output) const {
 
   for (int r = 0; r < resized_classes.rows; ++r) {
     for (int c = 0; c < resized_classes.cols; ++c) {
-      int16_t* pixel = output.ptr<int16_t>(r, c);
-      const auto class_id = resized_classes.at<int16_t>(r, c);
+      Label* pixel = output.ptr<Label>(r, c);
+      const auto class_id = resized_classes.at<Label>(r, c);
       *pixel = getRemappedLabel(class_id);
     }
   }
@@ -209,68 +247,35 @@ void ImageRecolor::recolorImage(const cv::Mat& classes, cv::Mat& output) const {
   for (int r = 0; r < resized_classes.rows; ++r) {
     for (int c = 0; c < resized_classes.cols; ++c) {
       uint8_t* pixel = output.ptr<uint8_t>(r, c);
-      const auto class_id = resized_classes.at<int16_t>(r, c);
+      const auto class_id = resized_classes.at<Label>(r, c);
       fillColor(class_id, pixel);
     }
   }
 }
 
-void ImageRecolor::labelImage(const cv::Mat& color, cv::Mat& output) const {
-  if (output.type() != CV_16S) {
-    return;
+const std::array<uint8_t, 3>& ImageRecolor::getColor(Label label) const {
+  const auto iter = color_map.find(label);
+  if (iter != color_map.end()) {
+    return iter->second;
   }
 
-  if (color.rows != output.rows || color.cols != output.cols) {
-    // Resizing the input color image to match the output dimensions
-    cv::resize(color,
-               color,
-               cv::Size(output.cols, output.rows),
-               0.0f,
-               0.0f,
-               cv::INTER_NEAREST);
+  if (!seen_unknown_labels_.count(label)) {
+    SLOG(ERROR) << "Encountered class id without color: " << label;
+    seen_unknown_labels_.insert(label);
   }
 
-  if (color.type() != CV_8UC3) {
-    throw std::runtime_error("Color image must be of type CV_8UC3");
-  }
-
-  for (int r = 0; r < color.rows; ++r) {
-    for (int c = 0; c < color.cols; ++c) {
-      int16_t* output_pixel = output.ptr<int16_t>(r, c);
-      const cv::Vec3b& input_pixel = color.at<cv::Vec3b>(r, c);
-      std::array<unsigned char, 3> key = {
-          input_pixel[0], input_pixel[1], input_pixel[2]};
-
-      const auto iter = color_to_label_.find(key);
-      if (iter != color_to_label_.end()) {
-        *output_pixel = iter->second;
-      } else {
-        *output_pixel = config.default_id;
-      }
-    }
-  }
+  return default_color;
 }
 
-void ImageRecolor::fillColor(int16_t class_id,
-                             uint8_t* pixel,
-                             size_t pixel_size) const {
-  const auto iter = color_map_.find(class_id);
-  if (iter != color_map_.end()) {
-    std::memcpy(pixel, iter->second.data(), pixel_size);
-    return;
-  }
-
-  if (!seen_unknown_labels_.count(class_id)) {
-    SLOG(ERROR) << "Encountered class id without color: " << class_id;
-    seen_unknown_labels_.insert(class_id);
-  }
-
-  std::memcpy(pixel, config.default_color.data(), pixel_size);
+void ImageRecolor::fillColor(Label class_id, uint8_t* pixel, size_t pixel_size) const {
+  const auto& color = getColor(class_id);
+  size_t to_copy = std::min(pixel_size, color.size());
+  std::memcpy(pixel, color.data(), to_copy);
 }
 
-int16_t ImageRecolor::getRemappedLabel(int16_t class_id) const {
-  const auto iter = label_remapping_.find(class_id);
-  if (iter != label_remapping_.end()) {
+Label ImageRecolor::getRemappedLabel(Label class_id) const {
+  const auto iter = label_remapping.find(class_id);
+  if (iter != label_remapping.end()) {
     return iter->second;
   }
 
@@ -296,7 +301,9 @@ void declare_config(ImageRecolor::Config& config) {
   field(config.default_color, "default_color");
   field(config.default_id, "default_id");
   field(config.offset, "offset");
-  field<Path>(config.colormap_path, "colormap_path");
+  field<Path::Absolute>(config.colormap_path, "colormap_path");
+  field(config.skip_header, "skip_header");
+  field(config.delimiter, "delimiter");
   check(config.default_color.size(), EQ, 3u, "color");
 }
 

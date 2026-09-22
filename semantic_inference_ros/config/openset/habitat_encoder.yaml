@@ -1,0 +1,45 @@
+---
+model:
+  refinement:
+    dilate_masks: true
+  clip_model:
+    type: open_clip
+    model_name: ViT-B-32  # ViT-L/14, ViT-B/32
+    tokenizer_name: ViT-B-32
+    pretrained: laion2b_s34b_b79k
+    cache_dir: /developer/hflex_eqa_ws/hf_models
+  pixelwise_clip_model:
+    type: lseg  # lseg, maskclip
+    # model_name: ViT-B-32
+    # pretrained: laion2b_s34b_b79k
+    model_path: /developer/hflex_eqa_ws/models/lseg.ckpt
+    refine: false
+    interpolate: false
+  use_pixelwise_embeddings: true
+  use_dense: false
+  dense_ratio: 0.9
+  max_batch: 10
+  max_batch_vlm: 6
+  text_embeddings: true
+  box_embeddings: false
+  mask_embeddings: true
+  text_embeddings_weight: 0.6
+  box_embeddings_weight: 0.0
+  mask_embeddings_weight: 0.4
+  cuda: true
+  max_depth: 7.0
+  min_depth: 0.05
+text_encoder_service:
+  layer_model:
+    type: open_clip
+    model_name: ViT-B-32
+    tokenizer_name: ViT-B-32
+    pretrained: laion2b_s34b_b79k
+    cache_dir: /developer/hflex_eqa_ws/hf_models
+  feature_model:
+    type: clip  # open_clip, clip
+    model_name: ViT-B/32
+    # model_name: ViT-B-32
+    # tokenizer_name: ViT-B-32
+    # pretrained: laion2b_s34b_b79k
+    # cache_dir: /developer/hflex_eqa_ws/hf_models

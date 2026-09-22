@@ -1,0 +1,96 @@
+---
+launch:
+  # Python environment
+  - arg:
+      name: python_env
+      default: /developer/semantics_env/bin/python3
+      description: Path to Python executable in the virtualenv
+
+  # Configuration file
+  - arg:
+      name: config_path_semantics
+      default: $(find-pkg-share semantic_inference_ros)/config/openset/yoloe-openclip_vit32b.yaml
+      description: Configuration file for object detector
+
+  # Worker parameters
+  - arg:
+      name: min_separation_s
+      default: '0.6'
+      description: Time separation between inputs
+  - arg:
+      name: compressed_rgb
+      default: 'false'
+      description: Triggers decompression for RGB stream
+
+  # Label space parameters
+  - arg:
+      name: use_task_labels
+      default: 'false'
+      description: Whether to use task-specific labels, which are variable
+  - arg:
+      name: labelspace_name
+      default: ade20k_full
+      description: Label remapping configuration
+  - arg:
+      name: labelspace_dir
+      default: $(find-pkg-share hydra)/config/label_spaces
+      description: Directory for label spaces
+  - arg:
+      name: colormap_path
+      default: $(find-pkg-share semantic_inference_ros)/config/distinct_150_colors.csv
+      description: Visualization colormap
+
+  # Layer embedding service name
+  - arg:
+      name: layer_embedding_service_name
+      default: /hydra_visualizer/color_by_layer_embedding
+      description: Name of the layer embedding service
+
+  # Set features service name
+  - arg:
+      name: set_features_service_name
+      default: /hvlm_planner/input/set_features
+      description: Name of the set features service
+  - node:
+      if: $(var compressed_rgb)
+      pkg: image_transport
+      exec: republish
+      name: decompress_rgb
+      namespace: semantic_inference
+      param:
+        - name: in_transport
+          value: compressed
+        - name: out_transport
+          value: raw
+      remap:
+        - from: in/compressed
+          to: color/image_raw/compressed
+        - from: out
+          to: color/image_raw
+  - node:
+      pkg: semantic_inference_ros
+      exec: openset_segmentation_node
+      name: semantic_inference
+      namespace: semantic_inference
+      on_exit: shutdown
+      launch-prefix: $(var python_env)
+      output: screen
+      param:
+        - name: config_path
+          value: $(var config_path_semantics)
+          type: str
+        - name: config
+          type: str
+          value: |-
+            worker:
+              min_separation_s: $(var min_separation_s)
+            recolor:
+              colormap_path: $(var colormap_path)
+              labels_path: "$(var labelspace_dir)/$(var labelspace_name)_label_space.yaml"
+            model:
+              object_labels_path: "$(var labelspace_dir)/$(var labelspace_name)_label_space.yaml"
+              segmentation:
+                labels_path: "$(var labelspace_dir)/$(var labelspace_name)_label_space.yaml"
+            text_encoder_service:
+              layer_embedding_service_name: $(var layer_embedding_service_name)
+              set_features_service_name: $(var set_features_service_name)

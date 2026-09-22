@@ -1,203 +1,112 @@
-# <div align="center">Semantic Segmentation and VLM Reasoning in ROS</div>
+# semantic_inference
 
-![License: MIT](https://img.shields.io/badge/License-BSD-green.svg)
-![ROS Version](https://img.shields.io/badge/ROS-Noetic-blue)
+<div align="center">
+   <img src="docs/media/demo_segmentation.png"/>
+</div>
 
-This repository extends [semantic_inference](https://github.com/MIT-SPARK/semantic_inference) to provide **closed and open set semantic segmentation** methods. Additionally, it provides methods to extract **CLIP embeddings** of objects and **relational embeddings** using Visual Language Models (VLMs).
+This repository provides code for running inference on images with pre-trained models to provide both closed and open-set semantics.
+Closed-set and open-set segmentation are implemented as follows:
+  - Inference using dense 2D closed-set semantic segmentation models is implemented in c++ using TensorRT
+  - Inference using open-set segmentation models and language features is implemented in python
 
----
+Both kinds of semantic segmentation have a ROS interface associated with them, split between c++ and python as appropriate.
+> **Note** </br>
+> We have archived our ROS1 interface [here](https://github.com/MIT-SPARK/semantic_inference/tree/archive/ros_noetic) and do not plan on any additional ROS1 development.
+
+### HFLEX-EQA compatibility
+
+The `hflex_eqa` branch supports both Ubuntu 24.04 desktop CUDA systems and NVIDIA Jetson Thor. Desktop environments should install `semantic_inference_python/requirements.txt`. The Thor Docker image already provides its CUDA-enabled PyTorch build and therefore installs `requirements-thor.txt`, which intentionally omits `torch` and `torchvision`. Both deployments use the same ROS nodes and select CUDA device 0 explicitly, avoiding GPU auto-detection differences on Jetson.
+
+HFLEX-EQA model and cache paths default to `/developer/hflex_eqa_ws/models` and `/developer/hflex_eqa_ws/hf_models`; override them in a copied YAML config if your container uses another layout. The complete Docker workflow is documented in the [`hvlm_planner` repository](https://github.com/ntnu-arl/hvlm_planner/tree/hflex_eqa).
 
 ## Table of Contents
 
-- [Setup](#setup)  
-  - [General Requirements](#general-requirements)  
-  - [Virtual Environment](#virtual-environment)  
-  - [Building](#building)  
-- [Usage](#usage)  
-  - [Open-set Segmentation](#open-set-segmentation)  
-  - [VLM for Object Relationship Embeddings](#vlm-for-object-relationship-embeddings)  
-  - [VLM/LLM Reasoning](#vlmllm-reasoning)  
-- [Citation](#citation)  
-- [License](#license)  
-- [Acknowledgements](#acknowledgements)  
-- [Contact](#contact)  
+- [Credits](#credits)
+- [Filing Issues](#filing-issues)
+- [Getting started](#getting-started)
+  - [Closed-set](docs/closed_set.md#setting-up)
+  - [Open-set](docs/open_set.md#setting-up)
+- [Usage](#usage)
 
----
+## Credits
 
-## Setup
+`semantic_inference` was primarily developed by [Nathan Hughes](https://mit.edu/sparklab/people.html) at the [MIT-SPARK Lab](https://mit.edu/sparklab), assisted by [Yun Chang](https://mit.edu/sparklab/people.html), [Jared Strader](https://mit.edu/sparklab/people.html), [Aaron Ray](https://mit.edu/sparklab/people.html), and [Dominic Maggio](https://mit.edu/sparklab/people.html).
+A full list of contributors is maintaned [here](contributors.md).
+We welcome additional contributions!
 
-### General Requirements
+## Filing Issues
 
-These instructions assume `ros-noetic-desktop-full` is installed on **Ubuntu 20.04**.  
+Please understand that this is research code maintained by busy graduate students, **which comes with some caveats**:
+  1. We do our best to maintain and keep the code up-to-date, but things may break or change occasionally
+  2. We do not have bandwidth to help adapt the code to new applications
+  3. The documentation, code-base and installation instructions are geared towards practitioners familiar with ROS
 
-Install the general dependencies:
+> **:warning: Warning**<br>
+> We don't support other platforms. Issues requesting support on other platforms (e.g., Ubuntu 18.04, Windows) will be summarily closed.
 
+Thank you in advance for your understanding!
+
+## Getting started
+
+The recommended use-case for the repository is with ROS.
+We assume some familiarity with ROS in these instructions.
+To start, clone this repository into your colcon workspace and run rosdep to get any missing dependencies.
+This usually looks like the following:
 ```bash
-sudo apt install python3-rosdep python3-catkin-tools
-```
-
-Clone the repository and initialize submodules:
-
-```bash
-git clone git@github.com:ntnu-arl/semantic_inference_ros.git
-git submodule init
-git submodule update --recursive
-```
-
-### Virtual Environment
-
-It is highly recommended to set up a **Python virtual environment** to run ROS Python nodes:
-
-```bash
-cd /path/to/catkin_ws/src/semantic_inference/semantic_inference_python
-python3.8 -m venv --system-site-packages ros_semantics_env
-source ros_semantics_env/bin/activate
-pip install -U pip
-pip install -r requirements.txt
-```
-
-### Building
-
-Install ROS dependencies:
-
-```bash
-cd /path/to/catkin_ws/src
+cd /path/to/colcon_ws/src
+git clone git@github.com:MIT-SPARK/semantic_inference.git
+vcs import . < semantic_inference/install/packages.yaml
 rosdep install --from-paths . --ignore-src -r -y
 ```
 
-For **closed-set segmentation**, follow the setup instructions (skip Python utilities) in [semantic_inference closed-set docs](https://github.com/MIT-SPARK/semantic_inference/blob/archive/ros_noetic/docs/closed_set.md).
+An (optional) quick primer for setting up a minimal workspace is below for those less familiar with ROS.
 
-Build the workspace:
+<details>
 
+<summary>Making a workspace</summary>
+
+First, make sure rosdep is setup:
 ```bash
-catkin config -DCMAKE_BUILD_TYPE=Release
-catkin build
+# Initialize necessary tools for working with ROS
+sudo apt install python3-vcstool python3-rosdep
+sudo rosdep init
+rosdep update
 ```
 
----
+Then, make the workspace and initialize it:
+```bash
+# Setup the workspace
+mkdir -p path/to/colcon_ws/src
+cd colcon_ws
+echo "build: {cmake-args: [--no-warn-unused-cli, -DCMAKE_BUILD_TYPE=Release]}" > colcon_defaults.yaml
+```
+
+</details>
+
+Once you've added this repository to your workspace, follow one (or both) of the following setup-guides as necessary:
+- [Closed-Set](docs/closed_set.md#setting-up)
+- [Open-Set](docs/open_set.md#setting-up)
+
+> **Note** </br>
+> Some of our other (larger) packages have or will have more accessible guides to getting `semantic_inference` set up for specific applications, such as [Hydra](https://github.com/MIT-SPARK/Hydra), [Khronos](https://github.com/MIT-SPARK/Khronos) or [Clio](https://github.com/MIT-SPARK/Clio).
 
 ## Usage
 
-### Open-set Segmentation
-
-Open-set segmentation consumes **RGB-D images** and camera information to perform semantic segmentation and extract **open-vocabulary features** for each object.  
-
-- Launch file: [openset_segmentation.launch](./semantic_inference_ros/launch/openset_segmentation.launch)  
-- Configuration: [openset_segmentation.yaml](./semantic_inference_ros/config/openset_segmentation.yaml)  
-
-Supported open-set detectors: [YOLOe](https://docs.ultralytics.com/models/yoloe/) and [YOLOw](https://docs.ultralytics.com/models/yolo-world/). These can detect any list of objects without re-training.
-
-```bash
-roslaunch semantic_inference_ros openset_segmentation.launch
+`semantic_inference` is not intended for standalone usage.
+Instead, the intention is for the launch files in `semantic_inference` to be used in a larger project.
+More details about including them can be found in the [closed-set](docs/closed_set.md#using-closed-set-segmentation-online) and [open-set](docs/open_set.md#using-open-set-segmentation-online) documentation.
+However, it is possible to do something like
+```
+ros2 launch semantic_inference_ros closed_set.launch.yaml
+```
+and then
+```
+ros2 bag play path/to/rosbag --remap /some/color/image/topic:=/color/image_raw
+```
+in a separate terminal to quickly test a particular segmentation model. The result can be visualized via
+```
+ros2 run image_view image_view --ros-args -r image:=/semantic_overlay/image_raw
 ```
 
-### VLM for Object Relationship Embeddings
-
-This method takes a segmented image along with its **original RGB-D frame** and computes **visual features** for each pair of detected objects. These features can be used to prompt a VLM for reasoning about relationships.  
-
-- Launch file: [vlm_features_node.launch](./semantic_inference_ros/launch/vlm_features_node.launch)  
-- Configuration: [vlm.yaml](./semantic_inference_ros/config/vlm.yaml)  
-
-Supported VLMs: [InstructBLIP](https://huggingface.co/collections/Salesforce/instructblip-models) and [DeepSeek-VL2](https://huggingface.co/deepseek-ai/deepseek-vl2).
-
-To use **DeepSeek-VL2**, first extract the visual encoder as a standalone model. For the large model (used in our experiments), we provide it [here](https://huggingface.co/ntnu-arl/deepseek-vl2-vision-enc). 
-
-Alternmatively, the models can be extracted with the following command (~100GB RAM required for the large moded):
-```bash
-python semantic_inference_python/scripts/extract_deepseek_visual.py --model_name <model to use> --output_path <path to store model>
-```
-
-Then, set the model path in [vlm.yaml](./semantic_inference_ros/config/vlm.yaml).
-
-Launch the node:
-
-```bash
-roslaunch semantic_inference_ros vlm_features.launch
-```
-
-### VLM/LLM Reasoning
-
-This section enables reasoning on the [relationship-aware hierarchical scene graph](https://github.com/ntnu-arl/reasoning_hydra).  
-
-- LLMs predict relevant objects and interactions for given tasks  
-- VLM responses are parsed by LLMs  
-- **OpenAI API key** required, run:  
-```bash
-export OPENAI_API_KEY=<Your OpenAI API Key>
-``` 
-
-VLM reasoning is performed on the cloud. Use [DeepSeek-VL2 server code](https://github.com/ntnu-arl/DeepSeek-VL2/tree/server) to run FastAPI server.
-
-Steps to set up the server:
-
-1. Clone the server repo:
-
-```bash
-git clone git@github.com:ntnu-arl/DeepSeek-VL2.git -b server
-cd DeepSeek-VL2
-```
-
-2. Set up the Python virtual environment:
-
-```bash
-bash setup.sh
-```
-
-3. Configure server path, port, and API key in `run_server.sh`.
-
-4. Run the server (model download may take time):
-
-```bash
-bash run_server.sh
-```
-
-Finally, set the **server URL** in [vlm_for_navigation.yaml](./semantic_inference_ros/config/vlm_for_navigation.yaml) and export your FASTAPI_KEY:
-```bash
-export FASTAPI_API_KEY=<Your server FastAPI Key>
-``` 
-
----
-
-## Citation
-
-```bibtex
-@inproceedings{puigjaner2026reasoninggraph,
-    title={Relationship-Aware Hierarchical 3D Scene Graph},
-    author={Gassol Puigjaner, Albert and Zacharia, Angelos and Alexis, Kostas},
-    booktitle={2026 IEEE International Conference on Robotics and Automation (ICRA)}, 
-    year={2026}
-}
-```
-
----
-
-## Zenodo DOI
-
-https://doi.org/10.5281/zenodo.18496220
-
----
-
-## License
-
-Released under **BSD-3-Clause**.
-
----
-
-## Acknowledgements
-
-This open-source release is based on work supported by the **European Commission** through:
-
-- **Project SYNERGISE**, under **Horizon Europe Grant Agreement No. 101121321**
-
----
-
-## Contact
-
-For questions or support, reach out via [GitHub Issues](https://github.com/ntnu-arl/semantic_inference_ros/issues) or contact the authors:
-
-- [Albert Gassol Puigjaner](mailto:albert.g.puigjaner@ntnu.no)  
-- [Angelos Zacharia](mailto:angelos.zacharia@ntnu.no)  
-- [Kostas Alexis](mailto:konstantinos.alexis@ntnu.no)
-
-
----
+> **Note** </br>
+> This usage (remapping the rosbag output topic) is a little bit backwards from how remappings from ROS are normally specified and is because launch files are unable to take remappings from the command line.

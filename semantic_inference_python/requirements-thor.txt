@@ -1,0 +1,21 @@
+# NVIDIA's Jetson Thor image already provides torch and torchvision.
+click
+distinctipy
+einops
+imageio
+onnx
+pandas
+rich
+rosbags
+ruamel.yaml
+seaborn
+spark_config@git+https://github.com/MIT-SPARK/Spark-Config.git
+numpy>=1.20,<2
+ultralytics
+open_clip_torch
+supervision
+pytorch_lightning
+gputil
+transformers
+accelerate
+sentencepiece

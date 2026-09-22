@@ -204,16 +204,15 @@ std::ostream& operator<<(std::ostream& out, const ModelInfo& info) {
 Model::Model(const ModelConfig& config)
     : model(config::checkValid(config)),
       runtime_(getRuntime(model.log_severity)),
-      engine_(deserializeEngine(*runtime_, model.engine_file)),
+      engine_(deserializeEngine(*runtime_, model.engine_path())),
       color_conversion_(config.color),
       depth_conversion_(config.depth) {
   if (!engine_ || config.force_rebuild) {
     SLOG(WARNING) << "Engine file not found! rebuilding...";
-    engine_ = buildEngineFromOnnx(
-        *runtime_, model.model_file, model.engine_file, model.log_severity);
+    engine_ = buildEngineFromOnnx(model, *runtime_);
     SLOG(INFO) << "Finished building engine";
   } else {
-    SLOG(INFO) << "Loaded engine file";
+    SLOG(DEBUG) << "Loaded engine file";
   }
 
   if (!engine_) {
@@ -227,19 +226,19 @@ Model::Model(const ModelConfig& config)
     throw std::runtime_error("failed to set up trt context");
   }
 
-  SLOG(INFO) << "Execution context started";
+  SLOG(DEBUG) << "Execution context started";
 
   if (cudaStreamCreate(&stream_) != cudaSuccess) {
     SLOG(ERROR) << "Creating cuda stream failed!";
     throw std::runtime_error("failed to set up cuda stream");
   } else {
-    SLOG(INFO) << "CUDA stream started";
+    SLOG(DEBUG) << "CUDA stream started";
   }
 
   initialized_ = true;
 
   info_ = ModelInfo(*engine_);
-  SLOG(INFO) << info_;
+  SLOG(DEBUG) << info_;
   if (!info_) {
     SLOG(ERROR) << "Invalid engine for segmentation!";
     throw std::runtime_error("invalid model");
@@ -366,7 +365,7 @@ SegmentationResult Model::infer() const {
   }
 
   cudaStreamSynchronize(stream_);
-  return {true, labels, cv::Mat()};
+  return {true, labels};
 }
 
 }  // namespace semantic_inference

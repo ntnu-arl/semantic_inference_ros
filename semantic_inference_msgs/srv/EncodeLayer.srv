@@ -1,0 +1,4 @@
+string prompt
+string layer
+---
+semantic_inference_msgs/FeatureVectorStamped feature

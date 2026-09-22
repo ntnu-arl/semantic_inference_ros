@@ -1,6 +1,3 @@
-// Portions of the following code and their modifications are originally from
-// https://github.com/MIT-SPARK/semantic_inference and are licensed under the following
-// license:
 /* -----------------------------------------------------------------------------
  * BSD 3-Clause License
  *
@@ -32,24 +29,18 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * * -------------------------------------------------------------------------- */
 
-// Copyright (c) 2025, Autonomous Robots Lab, Norwegian University of Science and
-// Technology All rights reserved.
-
-// This source code is licensed under the BSD-style license found in the
-// LICENSE file in the root directory of this source tree
-
 #pragma once
+#include <memory>
+
 #include <opencv2/core/mat.hpp>
 
 #include "semantic_inference/model_config.h"
-#include "semantic_inference/panoptic_extractor.h"
 
 namespace semantic_inference {
 
 struct SegmentationResult {
   bool valid = false;
   cv::Mat labels;
-  cv::Mat panoptic_ids;
 
   inline operator bool() const { return valid; }
 };
@@ -66,12 +57,11 @@ class Segmenter {
 
   virtual ~Segmenter();
 
-  SegmentationResult infer(const cv::Mat& img, const cv::Mat& depth = cv::Mat());
+  SegmentationResult infer(const cv::Mat& img, const cv::Mat& depth = cv::Mat()) const;
 
  private:
   struct Impl;
   std::unique_ptr<Impl> impl_;
-  std::unique_ptr<PanopticExtractor> panoptic_extractor_;
   DepthLabelMask mask_;
 };
 

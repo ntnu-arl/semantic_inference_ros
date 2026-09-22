@@ -1,0 +1,28 @@
+---
+launch:
+  - arg:
+      name: python_env
+      default: /developer/semantics_env/bin/python3
+      description: Path to Python executable in the virtualenv
+  - arg: {name: config_path, default: $(find-pkg-share semantic_inference_ros)/config/openset/fastsam-clip_vit14l.yaml, description: Configuration file for object detector}
+  - arg: {name: compressed_rgb, default: 'false', description: Triggers decompression for RGB stream}
+  - node:
+      if: $(var compressed_rgb)
+      pkg: image_transport
+      exec: republish
+      name: decompress_rgb
+      param:
+        - {name: in_transport, value: compressed}
+        - {name: out_transport, value: raw}
+      remap:
+        - {from: in/compressed, to: color/image_raw/compressed}
+        - {from: out, to: color/image_raw}
+  - node:
+      pkg: semantic_inference_ros
+      exec: open_set_node
+      name: semantic_inference
+      namespace: semantic_inference
+      on_exit: shutdown
+      launch-prefix: $(var python_env)
+      param:
+        - {name: config_path, value: $(var config_path), type: str}

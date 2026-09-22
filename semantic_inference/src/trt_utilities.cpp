@@ -198,8 +198,8 @@ std::string toString(nvinfer1::DataType dtype) {
       return "BOOL";
     case nvinfer1::DataType::kUINT8:
       return "UINT8";
-      // case nvinfer1::DataType::kFP8:
-      // return "FP8";
+    case nvinfer1::DataType::kFP8:
+      return "FP8";
 #if NV_TENSORRT_MAJOR >= 10
     case nvinfer1::DataType::kBF16:
       return "BF16";
@@ -272,15 +272,13 @@ inline nvinfer1::Dims replaceDynamic(const nvinfer1::Dims& dims, int64_t new_val
   return new_dims;
 }
 
-EnginePtr buildEngineFromOnnx(IRuntime& runtime,
-                              const std::filesystem::path& model_path,
-                              const std::filesystem::path& engine_path,
-                              const std::string& verbosity) {
+EnginePtr buildEngineFromOnnx(const ModelConfig& model_config, IRuntime& runtime) {
   using nvinfer1::Dims3;
   using nvinfer1::OptProfileSelector;
 
+  const auto model_path = model_config.model_path();
   SLOG(INFO) << "Building engine from " << model_path << "...";
-  auto& logger = LoggingShim::instance(verbosity);
+  auto& logger = LoggingShim::instance(model_config.log_severity);
   std::unique_ptr<nvinfer1::IBuilder> builder(nvinfer1::createInferBuilder(logger));
   int flags = 0;
 #if NV_TENSORRT_MAJOR < 10
@@ -305,9 +303,7 @@ EnginePtr buildEngineFromOnnx(IRuntime& runtime,
   auto output_dtype = output->getType();
   if (output_dtype != nvinfer1::DataType::kINT32) {
     SLOG(WARNING) << "Add extra output cast layer to INT32";
-    auto identity = net->addIdentity(*output);
-    identity->setOutputType(0, nvinfer1::DataType::kINT32);
-    auto layer = identity;
+    auto layer = net->addCast(*output, nvinfer1::DataType::kINT32);
     net->unmarkOutput(*output);
     layer->getOutput(0)->setName("output_int32");
     net->markOutput(*layer->getOutput(0));
@@ -323,9 +319,15 @@ EnginePtr buildEngineFromOnnx(IRuntime& runtime,
       continue;
     }
 
-    profile->setDimensions(name, OptProfileSelector::kMIN, replaceDynamic(dims, 100));
-    profile->setDimensions(name, OptProfileSelector::kOPT, replaceDynamic(dims, 500));
-    profile->setDimensions(name, OptProfileSelector::kMAX, replaceDynamic(dims, 800));
+    profile->setDimensions(name,
+                           OptProfileSelector::kMIN,
+                           replaceDynamic(dims, model_config.min_optimization_size));
+    profile->setDimensions(name,
+                           OptProfileSelector::kOPT,
+                           replaceDynamic(dims, model_config.target_optimization_size));
+    profile->setDimensions(name,
+                           OptProfileSelector::kMAX,
+                           replaceDynamic(dims, model_config.max_optimization_size));
     config->addOptimizationProfile(profile);
   }
 
@@ -335,7 +337,7 @@ EnginePtr buildEngineFromOnnx(IRuntime& runtime,
     return nullptr;
   }
 
-  std::ofstream fout(engine_path, std::ios::binary);
+  std::ofstream fout(model_config.engine_path(), std::ios::binary);
   fout.write(reinterpret_cast<char*>(memory->data()), memory->size());
 
   EnginePtr engine(runtime.deserializeCudaEngine(memory->data(), memory->size()));

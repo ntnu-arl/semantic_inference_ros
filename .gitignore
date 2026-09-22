@@ -161,7 +161,6 @@ celerybeat.pid
 .venv
 env/
 venv/
-ros_semantics_env/
 ENV/
 env.bak/
 venv.bak/
@@ -215,3 +214,5 @@ compile_commands.json
 *.sarif
 
 *.pt
+
+semantic_inference_python/test_scripts/

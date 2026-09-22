@@ -1,0 +1,3 @@
+string[] prompts
+---
+semantic_inference_msgs/FeatureVectors features

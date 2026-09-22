@@ -1,6 +1,3 @@
-// Portions of the following code and their modifications are originally from
-// https://github.com/MIT-SPARK/semantic_inference and are licensed under the following
-// license:
 /* -----------------------------------------------------------------------------
  * BSD 3-Clause License
  *
@@ -32,61 +29,42 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * * -------------------------------------------------------------------------- */
 
-// Copyright (c) 2025, Autonomous Robots Lab, Norwegian University of Science and
-// Technology All rights reserved.
-
-// This source code is licensed under the BSD-style license found in the
-// LICENSE file in the root directory of this source tree
-
 #pragma once
-#include <cv_bridge/cv_bridge.h>
-#include <image_transport/image_transport.h>
-#include <ros/ros.h>
 #include <semantic_inference/image_recolor.h>
-#include <semantic_inference_msgs/FeatureImage.h>
-#include <semantic_inference_msgs/FeatureVectorStamped.h>
 
-#include <opencv2/imgproc.hpp>
+#include <rclcpp/node_interfaces/node_interfaces.hpp>
+#include <rclcpp/node_interfaces/node_parameters_interface.hpp>
+#include <rclcpp/node_interfaces/node_topics_interface.hpp>
+#include <std_msgs/msg/header.hpp>
 
 namespace semantic_inference {
 
 class OutputPublisher {
  public:
+  using Interface = rclcpp::node_interfaces::NodeInterfaces<
+      rclcpp::node_interfaces::NodeTopicsInterface,
+      rclcpp::node_interfaces::NodeParametersInterface>;
+
   struct Config {
     ImageRecolor::Config recolor;
     bool publish_labels = true;
     bool publish_color = true;
     bool publish_overlay = true;
-    bool publish_panoptic = true;
     double overlay_alpha = 0.4;
-    bool open_vocab = false;
   } const config;
 
-  OutputPublisher(const Config& config,
-                  image_transport::ImageTransport& transport,
-                  ros::NodeHandle& nh);
+  OutputPublisher(const Config& config, Interface node);
+  ~OutputPublisher();
 
-  void publish(const std_msgs::Header& header,
+  void publish(const std_msgs::msg::Header& header,
                const cv::Mat& labels,
-               const cv::Mat& color,
-               const std::optional<cv::Mat>& panoptic = std::nullopt);
+               const cv::Mat& color);
 
  private:
-  void resizePanoptic(const cv::Mat& panoptic) const;
-
   ImageRecolor image_recolor_;
 
-  image_transport::Publisher label_pub_;
-  image_transport::Publisher color_pub_;
-  image_transport::Publisher panoptic_pub_;
-  image_transport::Publisher overlay_pub_;
-  ros::Publisher image_feature_pub_;
-  ros::Publisher semantics_with_features_pub_;
-
-  cv_bridge::CvImagePtr label_image_;
-  cv_bridge::CvImagePtr color_image_;
-  cv_bridge::CvImagePtr panoptic_image_;
-  cv_bridge::CvImagePtr overlay_image_;
+  struct Impl;
+  std::unique_ptr<Impl> impl_;
 };
 
 void declare_config(OutputPublisher::Config& config);

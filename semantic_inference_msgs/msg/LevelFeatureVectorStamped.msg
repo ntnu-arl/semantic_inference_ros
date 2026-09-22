@@ -1,2 +1,0 @@
-string level
-semantic_inference_msgs/FeatureVectorStamped feature

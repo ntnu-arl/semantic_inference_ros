@@ -31,6 +31,8 @@
 
 #include "semantic_inference/logging.h"
 
+#include <config_utilities/internal/logger.h>
+
 #include <filesystem>
 #include <iostream>
 
@@ -56,6 +58,11 @@ void Logger::dispatchLogEntry(const LogEntry& entry) {
   }
 }
 
+void Logger::logMessage(Level level, const std::string& message) {
+  LogEntry entry(level);
+  entry << message;
+}
+
 Logger::Logger() {}
 
 LogEntry::LogEntry(Level level, const std::string& filename, int lineno)
@@ -64,11 +71,16 @@ LogEntry::LogEntry(Level level, const std::string& filename, int lineno)
 LogEntry::~LogEntry() { Logger::dispatchLogEntry(*this); }
 
 std::string LogEntry::prefix() const {
+  if (filename.empty()) {
+    return "";
+  }
+
   std::stringstream ss;
   ss << "[" << std::filesystem::path(filename).filename().string();
   if (lineno > 0) {
     ss << ":" << lineno;
   }
+
   ss << "] ";
   return ss.str();
 }
@@ -103,6 +115,50 @@ void CoutSink::dispatch(const logging::LogEntry& entry) const {
       std::cout << "[DEBUG]" << ss.str() << std::endl;
       break;
   }
+}
+
+SimpleSink::SimpleSink(Level level, bool with_prefix)
+    : level(level), with_prefix(with_prefix) {}
+
+void SimpleSink::dispatch(const LogEntry& entry) const {
+  if (entry.level < level) {
+    // skip ignored entries
+    return;
+  }
+
+  std::stringstream ss;
+  if (with_prefix) {
+    ss << entry.prefix();
+  }
+
+  ss << entry.message();
+  std::cout << ss.str() << std::endl;
+}
+
+struct SlogLogger : config::internal::Logger {
+  void logImpl(const config::internal::Severity severity,
+               const std::string& message) override {
+    switch (severity) {
+      default:
+      case config::internal::Severity::kInfo:
+        logging::Logger::logMessage(Level::INFO, message);
+        break;
+      case config::internal::Severity::kWarning:
+        logging::Logger::logMessage(Level::INFO, message);
+        break;
+      case config::internal::Severity::kError:
+        logging::Logger::logMessage(Level::ERROR, message);
+        break;
+      case config::internal::Severity::kFatal:
+        logging::Logger::logMessage(Level::FATAL, message);
+        throw std::runtime_error(message);
+        break;
+    }
+  }
+};
+
+void setConfigUtilitiesLogger() {
+  config::internal::Logger::setLogger(std::make_shared<SlogLogger>());
 }
 
 }  // namespace logging

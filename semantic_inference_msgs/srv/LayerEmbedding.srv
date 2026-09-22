@@ -1,0 +1,4 @@
+semantic_inference_msgs/FeatureVectorStamped feature
+int16 layer_id
+---
+bool success

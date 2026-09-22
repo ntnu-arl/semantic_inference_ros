@@ -1,24 +1,37 @@
 <?xml version="1.0"?>
-<package format="2">
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
   <name>semantic_inference_ros</name>
   <version>0.0.1</version>
-  <description>ROS interface for semantic segmentation and reasoning</description>
+  <description>ROS interface to tensorrt segmentation</description>
 
-  <author email="na26933@mit.edu">Nathan Hughes</author>
-  <author email="albert.g.puigjaner@ntnu.no">Albert Gassol Puigjaner</author>
-  <maintainer email="albert.g.puigjaner@ntnu.no">Albert Gassol Puigjaner</maintainer>
-  <license>BSD</license>
+  <maintainer email="na26933@mit.edu">Nathan Hughes</maintainer>
+  <license>3-Clause BSD License</license>
 
-  <buildtool_depend>catkin</buildtool_depend>
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <buildtool_depend>ament_cmake_python</buildtool_depend>
+  <depend>ament_index_cpp</depend>
+  <depend>cli11</depend>
   <depend>cv_bridge</depend>
-  <depend>image_transport</depend>
-  <depend>nodelet</depend>
-  <depend>roscpp</depend>
+  <depend>ianvs</depend>
+  <depend>image_geometry</depend>
+  <depend>message_filters</depend>
+  <depend>nlohmann-json-dev</depend>
+  <depend>rclcpp</depend>
+  <depend>rclcpp_components</depend>
+  <depend>rosbag2_transport</depend>
   <depend>semantic_inference</depend>
   <depend>semantic_inference_python</depend>
-  <depend>semantic_inference_msgs</depend>
+  <depend>tf2_eigen</depend>
+  <depend>hydra_msgs</depend>
+  <depend>hvlm_planner_msgs</depend>
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>image_transport_plugins</exec_depend>
+
+  <test_depend>pcl_conversions</test_depend>
+  <test_depend>ament_cmake_gtest</test_depend>
 
   <export>
-      <nodelet plugin="${prefix}/nodelet_plugins.xml"/>
+      <build_type>ament_cmake</build_type>
   </export>
 </package>
