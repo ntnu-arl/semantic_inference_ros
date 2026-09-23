@@ -31,6 +31,7 @@
 #
 """Node that runs openset segmentation."""
 
+import os
 import pathlib
 from dataclasses import dataclass, field
 from typing import Optional
@@ -134,7 +135,7 @@ class OpensetSegmentationNode(Node):
             self,
             self.config.text_encoder_service,
         )
-        self._embedder.to_device(device)
+        self._embedder.to_device(os.environ.get("HFLEX_EQA_QUERY_DEVICE") or device)
         self._color_pub = self.create_publisher(Image, "semantic_color/image_raw", 1)
         self.get_logger().info("Finished initializing!")
         qos = QoSProfile(
