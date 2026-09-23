@@ -24,7 +24,7 @@
   <depend>semantic_inference_python</depend>
   <depend>tf2_eigen</depend>
   <depend>hydra_msgs</depend>
-  <depend>hvlm_planner_msgs</depend>
+  <depend>hflex_eqa_msgs</depend>
   <exec_depend>rclpy</exec_depend>
   <exec_depend>image_transport_plugins</exec_depend>
 

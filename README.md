@@ -17,7 +17,7 @@ Both kinds of semantic segmentation have a ROS interface associated with them, s
 
 The `hflex_eqa` branch supports both Ubuntu 24.04 desktop CUDA systems and NVIDIA Jetson Thor. Desktop environments should install `semantic_inference_python/requirements.txt`. The Thor Docker image already provides its CUDA-enabled PyTorch build and therefore installs `requirements-thor.txt`, which intentionally omits `torch` and `torchvision`. Both deployments use the same ROS nodes and select CUDA device 0 explicitly, avoiding GPU auto-detection differences on Jetson.
 
-HFLEX-EQA model and cache paths default to `/developer/hflex_eqa_ws/models` and `/developer/hflex_eqa_ws/hf_models`; override them in a copied YAML config if your container uses another layout. The complete Docker workflow is documented in the [`hvlm_planner` repository](https://github.com/ntnu-arl/hvlm_planner/tree/hflex_eqa).
+HFLEX-EQA model and cache paths default to `/developer/hflex_eqa_ws/models` and `/developer/hflex_eqa_ws/hf_models`; override them in a copied YAML config if your container uses another layout. The complete Docker workflow is documented in the [`hflex_eqa` repository](https://github.com/ntnu-arl/hflex_eqa/tree/main).
 
 ## Table of Contents
 

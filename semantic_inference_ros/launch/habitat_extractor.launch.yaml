@@ -45,7 +45,7 @@ launch:
   # Set features service name
   - arg:
       name: set_features_service_name
-      default: /hvlm_planner/input/set_features
+      default: /hflex_eqa/input/set_features
       description: Name of the set features service
   - node:
       if: $(var compressed_rgb)

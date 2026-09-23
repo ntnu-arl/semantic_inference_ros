@@ -41,7 +41,7 @@ import rclpy
 import spark_config as sc
 import torch
 import yaml
-from hvlm_planner_msgs.msg import EQAPlannerOutput
+from hflex_eqa_msgs.msg import EQAPlannerOutput
 from hydra_msgs.msg import NewLabels
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
